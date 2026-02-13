@@ -7,6 +7,10 @@ class EntityType:
     BOSS = "boss"
     ITEM = "item"
 
+class Faction:
+    PLAYER = "player"
+    DUNGEON = "dungeon"
+
 class Position(BaseModel):
     x: int
     y: int
@@ -22,6 +26,7 @@ class Entity(BaseModel):
     defense: int
     speed: float = 1.0
     is_alive: bool = True
+    faction: str
 
     def move(self, dx: int, dy: int):
         self.pos.x += dx
@@ -56,11 +61,13 @@ class Wearable(Item):
 
 class Mob(Entity):
     type: str = EntityType.MOB
+    faction: str = Faction.DUNGEON
     ai_state: str = "idle"
     target_id: Optional[str] = None
 
 class Player(Entity):
     type: str = EntityType.PLAYER
+    faction: str = Faction.PLAYER
     experience: int = 0
     level: int = 1
     strength: int = 10

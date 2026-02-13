@@ -2,7 +2,7 @@ import uuid
 import random
 from typing import Dict, List, Optional
 from app.engine.dungeon.generator import DungeonGenerator, TileType
-from app.engine.entities.base import Player, Mob, Position, EntityType, Mob as MobEntity, Item, Weapon, Wearable
+from app.engine.entities.base import Player, Mob, Position, EntityType, Mob as MobEntity, Item, Weapon, Wearable, Faction
 
 class GameInstance:
     def __init__(self, game_id: str):
@@ -46,7 +46,8 @@ class GameInstance:
                 hp=10,
                 max_hp=10,
                 attack=2,
-                defense=0
+                defense=0,
+                faction=Faction.DUNGEON
             )
 
         # Spawn Items
@@ -88,7 +89,8 @@ class GameInstance:
             hp=100 + (self.depth * 20),
             max_hp=100 + (self.depth * 20),
             attack=10 + self.depth,
-            defense=5 + self.depth
+            defense=5 + self.depth,
+            faction=Faction.DUNGEON
         )
 
     def add_player(self, player_id: str, name: str) -> Player:
@@ -100,7 +102,8 @@ class GameInstance:
             hp=10,
             max_hp=10,
             attack=3,
-            defense=1
+            defense=1,
+            faction=Faction.PLAYER
         )
         self.players[player_id] = player
         return player
@@ -134,12 +137,13 @@ class GameInstance:
                         break
             
             if target_entity:
-                # Combat!
-                attack_power = entity.attack
-                if isinstance(entity, Player):
-                    attack_power = entity.get_total_attack()
-                
-                dmg = target_entity.take_damage(attack_power)
+                # Combat! Only if different factions
+                if entity.faction != target_entity.faction:
+                    attack_power = entity.attack
+                    if isinstance(entity, Player):
+                        attack_power = entity.get_total_attack()
+                    
+                    dmg = target_entity.take_damage(attack_power)
                 return
             
             tile = self.grid[new_y][new_x]
