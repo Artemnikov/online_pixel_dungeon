@@ -237,7 +237,12 @@ function App() {
 
   return (
     <div className="game-container">
-      <h1 className="pixel-title">ONLINE PIXEL DUNGEON</h1>
+      {grid.length === 0 && (
+        <div className="loading-screen">
+          <div className="loading-spinner"></div>
+          <div className="loading-text">Loading Dungeon...</div>
+        </div>
+      )}
 
       <button className="inventory-toggle-btn" onClick={() => setShowInventory(true)}>
         🎒
