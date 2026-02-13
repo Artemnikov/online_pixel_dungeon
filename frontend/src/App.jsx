@@ -41,6 +41,13 @@ function App() {
         }
       } else if (data.type === 'STATE_UPDATE') {
         // Sync players
+        const currentServerPlayerIds = new Set(data.players.map(p => p.id))
+        Object.keys(entitiesRef.current.players).forEach(id => {
+          if (!currentServerPlayerIds.has(id)) {
+            delete entitiesRef.current.players[id]
+          }
+        })
+
         data.players.forEach(p => {
           if (p.id === myPlayerIdRef.current) {
             setInventory(p.inventory || [])
@@ -69,6 +76,13 @@ function App() {
         })
 
         // Sync mobs
+        const currentServerMobIds = new Set(data.mobs.map(m => m.id))
+        Object.keys(entitiesRef.current.mobs).forEach(id => {
+          if (!currentServerMobIds.has(id)) {
+            delete entitiesRef.current.mobs[id]
+          }
+        })
+
         data.mobs.forEach(m => {
           if (!entitiesRef.current.mobs[m.id]) {
             entitiesRef.current.mobs[m.id] = { ...m, renderPos: { x: m.pos.x, y: m.pos.y } }
