@@ -116,8 +116,16 @@ function App() {
             entitiesRef.current.players[p.id] = { ...p, renderPos: { x: p.pos.x, y: p.pos.y }, facing: 'RIGHT' }
           } else {
             const currentTarget = entitiesRef.current.players[p.id].targetPos || entitiesRef.current.players[p.id].renderPos;
-            if (p.pos.x > currentTarget.x) entitiesRef.current.players[p.id].facing = 'RIGHT';
-            else if (p.pos.x < currentTarget.x) entitiesRef.current.players[p.id].facing = 'LEFT';
+            const dx = p.pos.x - currentTarget.x;
+            const dy = p.pos.y - currentTarget.y;
+
+            if (Math.abs(dx) > Math.abs(dy)) {
+              if (dx > 0) entitiesRef.current.players[p.id].facing = 'RIGHT';
+              else if (dx < 0) entitiesRef.current.players[p.id].facing = 'LEFT';
+            } else {
+              if (dy > 0) entitiesRef.current.players[p.id].facing = 'DOWN';
+              else if (dy < 0) entitiesRef.current.players[p.id].facing = 'UP';
+            }
 
             entitiesRef.current.players[p.id].targetPos = p.pos
             entitiesRef.current.players[p.id].name = p.name
@@ -331,30 +339,37 @@ function App() {
 
         if (assetImages.warrior) {
           ctx.save();
+
+          // Adjusted source width to 12px to avoid artifacts from adjacent sprites
+          const sWidth = 12;
+          const dWidth = sWidth * TILE_SCALE;
+          const xOffset = (TILE_SIZE - dWidth) / 2;
+
           if (player.facing === 'LEFT') {
-            ctx.translate(x + TILE_SIZE, y);
+            ctx.translate(x + TILE_SIZE - xOffset, y);
             ctx.scale(-1, 1);
             ctx.drawImage(
               assetImages.warrior,
               0, // Source x
               0, // Source y
-              TILE_SIZE / TILE_SCALE, // Source width
+              sWidth, // Source width
               TILE_SIZE / TILE_SCALE, // Source height
-              0, // dx
+              0, // dx (relative to translated origin)
               0, // dy
-              TILE_SIZE,
+              dWidth,
               TILE_SIZE
             );
           } else {
+            // RIGHT, UP, DOWN
             ctx.drawImage(
               assetImages.warrior,
               0, // Source x
               0, // Source y
-              TILE_SIZE / TILE_SCALE, // Source width
+              sWidth, // Source width
               TILE_SIZE / TILE_SCALE, // Source height
-              x,
+              x + xOffset,
               y,
-              TILE_SIZE,
+              dWidth,
               TILE_SIZE
             );
           }
@@ -371,8 +386,9 @@ function App() {
 
         if (player.is_downed) {
           ctx.fillStyle = '#e74c3c';
-          ctx.font = 'bold 10px Arial';
-          ctx.fillText("DOWNED", x + TILE_SIZE / 2, y - 25);
+          ctx.textAlign = 'center';
+          ctx.font = '24px Arial';
+          ctx.fillText("☠️", x + TILE_SIZE / 2, y - 25);
         }
 
         ctx.fillStyle = 'white';
