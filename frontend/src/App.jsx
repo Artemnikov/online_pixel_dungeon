@@ -3,14 +3,59 @@ import './App.css'
 
 import sewerTiles from './assets/pixel-dungeon/environment/tiles_sewers.png';
 import warriorSprite from './assets/pixel-dungeon/sprites/warrior.png';
+import mageSprite from './assets/pixel-dungeon/sprites/mage.png';
+import rogueSprite from './assets/pixel-dungeon/sprites/rogue.png';
+import huntressSprite from './assets/pixel-dungeon/sprites/huntress.png';
+import itemsSprite from './assets/pixel-dungeon/sprites/items.png';
+
 import ratSprite from './assets/pixel-dungeon/sprites/rat.png';
 import batSprite from './assets/pixel-dungeon/sprites/bat.png';
 import AudioManager from './audio/AudioManager';
+import CharacterSelection from './CharacterSelection';
 
 
 const TILE_SIZE = 32
 const TILE_SCALE = 2; // scale factor to draw 16x16 assets at 32x32
 const INTERPOLATION_SPEED = 0.2 // Speed of moving towards server position
+
+// Item Sprite Mapping (Simplified based on ItemSpriteSheet.java)
+// Format: { name_keyword: [col, row] }
+const ITEM_SPRITES = {
+  // Weapon Tier 1
+  "Shortsword": [13, 13],
+  "Mage's Staff": [15, 16],
+  "Dagger": [12, 13],
+  "Spirit Bow": [0, 10], // Assuming MISSILE_WEP starts at row 10, col 0? No, col 16/16. Let's approximate.
+
+  // Weapon Tier 2
+  "Wooden Club": [15, 15], // Cudgel
+  "Spear": [0, 7],
+
+  // Wearable
+  "Cloth Armor": [15, 12],
+  "Leather Vest": [14, 13],
+  "Rogue's Cloak": [9, 15], // Cloak artifact maybe?
+  "Broken Shield": [12, 16], // Buckler?
+
+  // Potions
+  "Potion": [12, 14],
+
+  // Default
+  "default": [8, 13]
+};
+
+// Helper to get sprite coords
+const getItemSpriteCoords = (itemName, itemType) => {
+  for (const key in ITEM_SPRITES) {
+    if (itemName && itemName.includes(key)) {
+      return ITEM_SPRITES[key];
+    }
+  }
+  if (itemType === 'potion') return [12, 14];
+  if (itemType === 'weapon') return [14, 14];
+  if (itemType === 'wearable') return [14, 12];
+  return ITEM_SPRITES["default"];
+}
 
 function App() {
   const canvasRef = useRef(null)
@@ -29,6 +74,9 @@ function App() {
   const [showInventory, setShowInventory] = useState(false)
   const [inventory, setInventory] = useState([])
   const [equippedItems, setEquippedItems] = useState({ weapon: null, wearable: null })
+
+  const [gameState, setGameState] = useState('SELECT'); // 'SELECT', 'PLAYING'
+  const [selectedClass, setSelectedClass] = useState('warrior');
 
   useEffect(() => {
     const enableAudio = () => {
@@ -52,39 +100,38 @@ function App() {
   const [assetImages, setAssetImages] = useState({
     tiles: null,
     warrior: null,
+    mage: null,
+    rogue: null,
+    huntress: null,
+    items: null,
     rat: null,
     bat: null,
   });
 
   useEffect(() => {
-    const tilesImg = new Image();
-    tilesImg.src = sewerTiles;
-    tilesImg.onload = () => {
-      setAssetImages(prev => ({ ...prev, tiles: tilesImg }));
-    };
+    const loadImage = (src, key) => {
+      const img = new Image();
+      img.src = src;
+      img.onload = () => {
+        setAssetImages(prev => ({ ...prev, [key]: img }));
+      };
+    }
 
-    const warriorImg = new Image();
-    warriorImg.src = warriorSprite;
-    warriorImg.onload = () => {
-      setAssetImages(prev => ({ ...prev, warrior: warriorImg }));
-    };
-
-    const ratImg = new Image();
-    ratImg.src = ratSprite;
-    ratImg.onload = () => {
-      setAssetImages(prev => ({ ...prev, rat: ratImg }));
-    };
-
-    const batImg = new Image();
-    batImg.src = batSprite;
-    batImg.onload = () => {
-      setAssetImages(prev => ({ ...prev, bat: batImg }));
-    };
+    loadImage(sewerTiles, 'tiles');
+    loadImage(warriorSprite, 'warrior');
+    loadImage(mageSprite, 'mage');
+    loadImage(rogueSprite, 'rogue');
+    loadImage(huntressSprite, 'huntress');
+    loadImage(itemsSprite, 'items');
+    loadImage(ratSprite, 'rat');
+    loadImage(batSprite, 'bat');
   }, []);
 
 
   useEffect(() => {
-    const ws = new WebSocket(`ws://${window.location.hostname}:8000/ws/game/${gameId}`)
+    if (gameState !== 'PLAYING') return;
+
+    const ws = new WebSocket(`ws://${window.location.hostname}:8000/ws/game/${gameId}?class_type=${selectedClass}`)
     socketRef.current = ws
 
     ws.onopen = () => setMessages(prev => [...prev, "Connected to server"])
@@ -150,6 +197,7 @@ function App() {
             entitiesRef.current.players[p.id].equipped_wearable = p.equipped_wearable
             entitiesRef.current.players[p.id].is_downed = p.is_downed
             entitiesRef.current.players[p.id].regen_ticks = p.regen_ticks
+            entitiesRef.current.players[p.id].class_type = p.class_type
           }
         })
 
@@ -190,7 +238,19 @@ function App() {
           data.events.forEach(event => {
             if (event.type === 'MOVE') {
               if (event.data.entity === myPlayerIdRef.current) {
-                AudioManager.play('MOVE');
+                // Check tile type for audio
+                const tileX = event.data.x;
+                const tileY = event.data.y;
+                // We need to look up the tile type in the grid.
+                // However, grid state might not be instantly updated if we just got a move event?
+                // Actually, the grid is static unless discovered. But the tile type is fixed in backend.
+                // We can use the local grid state.
+                if (grid[tileY] && grid[tileY][tileX]) {
+                  const tileType = grid[tileY][tileX];
+                  AudioManager.playStep(tileType);
+                } else {
+                  AudioManager.play('MOVE');
+                }
               }
             } else {
               AudioManager.play(event.type);
@@ -200,8 +260,12 @@ function App() {
       }
     }
 
-    return () => ws.close()
-  }, [gameId])
+    return () => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    }
+  }, [gameId, gameState])
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -283,10 +347,26 @@ function App() {
       if (entitiesRef.current.items) {
         entitiesRef.current.items.forEach(item => {
           if (!visionRef.current.visible.has(`${item.pos.x},${item.pos.y}`)) return;
-          ctx.fillStyle = item.type === 'weapon' ? '#f1c40f' : '#9b59b6';
-          ctx.beginPath();
-          ctx.arc(item.pos.x * TILE_SIZE + TILE_SIZE / 2, item.pos.y * TILE_SIZE + TILE_SIZE / 2, 6, 0, Math.PI * 2);
-          ctx.fill();
+
+          if (assetImages.items) {
+            const coords = getItemSpriteCoords(item.name, item.type);
+            ctx.drawImage(
+              assetImages.items,
+              coords[0] * (TILE_SIZE / TILE_SCALE), // sx
+              coords[1] * (TILE_SIZE / TILE_SCALE), // sy
+              TILE_SIZE / TILE_SCALE, // sWidth
+              TILE_SIZE / TILE_SCALE, // sHeight
+              item.pos.x * TILE_SIZE,
+              item.pos.y * TILE_SIZE,
+              TILE_SIZE,
+              TILE_SIZE
+            );
+          } else {
+            ctx.fillStyle = item.type === 'weapon' ? '#f1c40f' : '#9b59b6';
+            ctx.beginPath();
+            ctx.arc(item.pos.x * TILE_SIZE + TILE_SIZE / 2, item.pos.y * TILE_SIZE + TILE_SIZE / 2, 6, 0, Math.PI * 2);
+            ctx.fill();
+          }
         });
       }
     };
@@ -365,7 +445,13 @@ function App() {
         const x = player.renderPos.x * TILE_SIZE;
         const y = player.renderPos.y * TILE_SIZE;
 
-        if (assetImages.warrior) {
+        // Select sprite based on class
+        let playerSprite = assetImages.warrior;
+        if (player.class_type === 'mage' && assetImages.mage) playerSprite = assetImages.mage;
+        else if (player.class_type === 'rogue' && assetImages.rogue) playerSprite = assetImages.rogue;
+        else if (player.class_type === 'huntress' && assetImages.huntress) playerSprite = assetImages.huntress;
+
+        if (playerSprite) {
           ctx.save();
 
           // Adjusted source width to 12px to avoid artifacts from adjacent sprites
@@ -377,7 +463,7 @@ function App() {
             ctx.translate(x + TILE_SIZE - xOffset, y);
             ctx.scale(-1, 1);
             ctx.drawImage(
-              assetImages.warrior,
+              playerSprite,
               0, // Source x
               0, // Source y
               sWidth, // Source width
@@ -390,7 +476,7 @@ function App() {
           } else {
             // RIGHT, UP, DOWN
             ctx.drawImage(
-              assetImages.warrior,
+              playerSprite,
               0, // Source x
               0, // Source y
               sWidth, // Source width
@@ -486,6 +572,13 @@ function App() {
 
   const useItem = (itemId) => {
     socketRef.current.send(JSON.stringify({ type: 'USE_ITEM', item_id: itemId }))
+  }
+
+  if (gameState === 'SELECT') {
+    return <CharacterSelection onSelect={(c) => {
+      setSelectedClass(c);
+      setGameState('PLAYING');
+    }} />;
   }
 
   return (

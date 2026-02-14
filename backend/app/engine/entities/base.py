@@ -77,6 +77,25 @@ class Difficulty:
     NORMAL = "normal"
     HARD = "hard"
 
+
+class CharacterClass:
+    WARRIOR = "warrior"
+    MAGE = "mage"
+    ROGUE = "rogue"
+    HUNTRESS = "huntress"
+
+class Bow(Weapon):
+    type: str = "weapon"
+    range: int = 6 # Longer range than standard weapons
+    name: str = "Bow"
+
+class Staff(Weapon):
+    type: str = "weapon"
+    range: int = 4
+    name: str = "Staff"
+    magic_damage: int = 0
+    charges: int = 4
+
 class Mob(Entity):
     type: str = EntityType.MOB
     faction: str = Faction.DUNGEON
@@ -87,6 +106,7 @@ class Mob(Entity):
 class Player(Entity):
     type: str = EntityType.PLAYER
     faction: str = Faction.PLAYER
+    class_type: str = CharacterClass.WARRIOR # Default
     experience: int = 0
     level: int = 1
     strength: int = 10

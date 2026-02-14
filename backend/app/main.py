@@ -84,12 +84,12 @@ async def root():
     return {"message": "Online Pixel Dungeon Server is running"}
 
 @app.websocket("/ws/game/{game_id}")
-async def game_websocket(websocket: WebSocket, game_id: str):
+async def game_websocket(websocket: WebSocket, game_id: str, class_type: str = "warrior"):
     player_id = str(uuid.uuid4())
     await manager.connect(game_id, websocket, player_id)
     
     game = manager.game_instances[game_id]
-    player = game.add_player(player_id, f"Player_{player_id[:4]}")
+    player = game.add_player(player_id, f"Player_{player_id[:4]}", class_type)
     
     try:
         while True:

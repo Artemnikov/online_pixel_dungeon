@@ -8,6 +8,9 @@ class TileType:
     DOOR = 3
     STAIRS_UP = 4
     STAIRS_DOWN = 5
+    FLOOR_WOOD = 6
+    FLOOR_WATER = 7
+    FLOOR_COBBLE = 8
 
 class Room:
     def __init__(self, x: int, y: int, width: int, height: int):
@@ -16,6 +19,10 @@ class Room:
         self.width = width
         self.height = height
         self.center = (x + width // 2, y + height // 2)
+        # 2 = FLOOR, 6 = WOOD, 7 = WATER, 8 = COBBLE
+        # Let's weight standard floor higher
+        types = [TileType.FLOOR, TileType.FLOOR, TileType.FLOOR, TileType.FLOOR_WOOD, TileType.FLOOR_WATER, TileType.FLOOR_COBBLE]
+        self.floor_type = random.choice(types)
 
     def intersects(self, other):
         return (self.x <= other.x + other.width and
@@ -68,7 +75,10 @@ class DungeonGenerator:
         for y in range(room.y, room.y + room.height):
             for x in range(room.x, room.x + room.width):
                 # Inside floor
-                self.grid[y][x] = TileType.FLOOR
+                # Randomize floor type per room or per tile? Per room looks better usually.
+                # But here we are iterating. Let's pick one for the room.
+                floor_type = getattr(room, 'floor_type', TileType.FLOOR)
+                self.grid[y][x] = floor_type
         
         # Add borders (Walls) - simpler logic for now: just surround floor with walls if void
         for y in range(room.y - 1, room.y + room.height + 1):
@@ -90,14 +100,16 @@ class DungeonGenerator:
 
     def _h_tunnel(self, x1, x2, y):
         for x in range(min(x1, x2), max(x1, x2) + 1):
-            self.grid[y][x] = TileType.FLOOR
+            if self.grid[y][x] == TileType.VOID:
+                self.grid[y][x] = TileType.FLOOR # Tunnels are standard floor
             # Surround with walls if void
             if y > 0 and self.grid[y-1][x] == TileType.VOID: self.grid[y-1][x] = TileType.WALL
             if y < self.height - 1 and self.grid[y+1][x] == TileType.VOID: self.grid[y+1][x] = TileType.WALL
 
     def _v_tunnel(self, y1, y2, x):
         for y in range(min(y1, y2), max(y1, y2) + 1):
-            self.grid[y][x] = TileType.FLOOR
+            if self.grid[y][x] == TileType.VOID:
+                self.grid[y][x] = TileType.FLOOR
             # Surround with walls if void
             if x > 0 and self.grid[y][x-1] == TileType.VOID: self.grid[y][x-1] = TileType.WALL
             if x < self.width - 1 and self.grid[y][x+1] == TileType.VOID: self.grid[y][x+1] = TileType.WALL

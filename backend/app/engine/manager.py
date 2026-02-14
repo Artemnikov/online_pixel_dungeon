@@ -2,7 +2,7 @@ import uuid
 import random
 from typing import Dict, List, Optional, Tuple
 from app.engine.dungeon.generator import DungeonGenerator, TileType
-from app.engine.entities.base import Player, Mob, Position, EntityType, Mob as MobEntity, Item, Weapon, Wearable, Faction, Difficulty, HealthPotion, RevivingPotion
+from app.engine.entities.base import Player, Mob, Position, EntityType, Mob as MobEntity, Item, Weapon, Wearable, Faction, Difficulty, HealthPotion, RevivingPotion, CharacterClass, Bow, Staff
 
 class GameInstance:
     def __init__(self, game_id: str):
@@ -17,6 +17,7 @@ class GameInstance:
         self.rooms = []
         self.events = []
         self.difficulty = Difficulty.NORMAL
+        self.player_count = 0 
         
         self.generate_floor(1)
 
@@ -45,22 +46,16 @@ class GameInstance:
         Check if a coordinate is within the start (entry) or end (exit) rooms.
         Monsters should not spawn here or enter these rooms.
         """
-        # We need to find which room contains (x, y)
-        # However, checking every room might be overkill if we just want Start/End
-        # Start Room is rooms[0], End Room is rooms[-1]
-        
         if not self.rooms:
             return False
 
         start_room = self.rooms[0]
         end_room = self.rooms[-1]
         
-        # Check if in start room
         if (start_room.x <= x < start_room.x + start_room.width and
             start_room.y <= y < start_room.y + start_room.height):
             return True
         
-        # Check if in end room
         if (end_room.x <= x < end_room.x + end_room.width and
             end_room.y <= y < end_room.y + end_room.height):
             return True
@@ -69,21 +64,16 @@ class GameInstance:
 
     def _spawn_content(self):
         floor_tiles = [(x, y) for y in range(self.height) for x in range(self.width) 
-                       if self.grid[y][x] == TileType.FLOOR]
+                       if self.grid[y][x] in [TileType.FLOOR, TileType.FLOOR_WOOD, TileType.FLOOR_WATER, TileType.FLOOR_COBBLE]]
         
-        # Filter out safe rooms for mobs
         unsafe_floor_tiles = [pos for pos in floor_tiles if not self._is_in_safe_room(pos[0], pos[1])]
         
-        # Spawn Boss every 5 floors - Bosses might need a special room, but for now use unsafe tiles
         if self.depth % 5 == 0:
-            self._spawn_boss(unsafe_floor_tiles) # Use unsafe tiles for boss too? Or maybe boss has its own room logic?
-            # Existing logic just picks a random floor tile. Let's stick to unsafe for now.
+            self._spawn_boss(unsafe_floor_tiles)
         
-        # Spawn Mobs
         num_mobs = 5 + (self.depth * 2)
         for _ in range(num_mobs):
             if not unsafe_floor_tiles: break
-            # Use unsafe_floor_tiles for mobs
             x, y = unsafe_floor_tiles.pop(random.randint(0, len(unsafe_floor_tiles) - 1))
             mob_id = str(uuid.uuid4())
             self.mobs[mob_id] = MobEntity(
@@ -97,7 +87,6 @@ class GameInstance:
                 faction=Faction.DUNGEON
             )
 
-        # Spawn Items - Items can be anywhere, including safe rooms
         num_items = 4 + random.randint(0, 3)
         for _ in range(num_items):
             if not floor_tiles: break
@@ -105,7 +94,7 @@ class GameInstance:
             item_id = str(uuid.uuid4())
             
             rand = random.random()
-            if rand < 0.3:
+            if rand < 0.2:
                 # Weapon
                 self.items[item_id] = Weapon(
                     id=item_id,
@@ -115,7 +104,26 @@ class GameInstance:
                     range=1,
                     strength_requirement=10 + random.randint(-2, 2)
                 )
-            elif rand < 0.6:
+            elif rand < 0.3: 
+                # Bow
+                self.items[item_id] = Bow(
+                    id=item_id,
+                    name="Old Bow",
+                    pos=Position(x=x, y=y),
+                    damage=2 + random.randint(0, 2),
+                    strength_requirement=10
+                )
+            elif rand < 0.4:
+                # Staff
+                self.items[item_id] = Staff(
+                    id=item_id,
+                    name="Magic Staff",
+                    pos=Position(x=x, y=y),
+                    damage=1 + random.randint(0, 2),
+                    magic_damage=2 + random.randint(0, 2),
+                    strength_requirement=10
+                )
+            elif rand < 0.7:
                 # Wearable
                 self.items[item_id] = Wearable(
                     id=item_id,
@@ -124,7 +132,7 @@ class GameInstance:
                     strength_requirement=10 + random.randint(-2, 2),
                     health_boost=5 + random.randint(0, 5)
                 )
-            elif rand < 0.8:
+            elif rand < 0.85:
                 # Health Potion
                 self.items[item_id] = HealthPotion(
                     id=item_id,
@@ -153,8 +161,42 @@ class GameInstance:
             faction=Faction.DUNGEON
         )
 
-    def add_player(self, player_id: str, name: str) -> Player:
+    def add_player(self, player_id: str, name: str, class_type: str = CharacterClass.WARRIOR) -> Player:
         spawn_pos = self._get_stairs_pos(TileType.STAIRS_UP)
+        
+        self.player_count += 1
+        
+        inventory = []
+        equipped_weapon = None
+        equipped_wearable = None
+        
+        if class_type == CharacterClass.WARRIOR:
+            w = Weapon(id=str(uuid.uuid4()), name="Shortsword", damage=3, range=1, strength_requirement=10)
+            inventory.append(w)
+            equipped_weapon = w
+            a = Wearable(id=str(uuid.uuid4()), name="Cloth Armor", strength_requirement=10, health_boost=5)
+            inventory.append(a)
+            equipped_wearable = a
+            
+        elif class_type == CharacterClass.MAGE:
+            w = Staff(id=str(uuid.uuid4()), name="Mage's Staff", damage=2, magic_damage=3, strength_requirement=10, charges=4)
+            inventory.append(w)
+            equipped_weapon = w
+            
+        elif class_type == CharacterClass.ROGUE:
+            w = Weapon(id=str(uuid.uuid4()), name="Dagger", damage=2, range=1, strength_requirement=9)
+            inventory.append(w)
+            equipped_weapon = w
+            a = Wearable(id=str(uuid.uuid4()), name="Rogue's Cloak", strength_requirement=9, health_boost=2)
+            inventory.append(a)
+            equipped_wearable = a
+
+        elif class_type == CharacterClass.HUNTRESS:
+            w = Bow(id=str(uuid.uuid4()), name="Spirit Bow", damage=2, strength_requirement=10)
+            inventory.append(w)
+            equipped_weapon = w
+        
+        
         player = Player(
             id=player_id,
             name=name,
@@ -163,8 +205,16 @@ class GameInstance:
             max_hp=10,
             attack=3,
             defense=1,
-            faction=Faction.PLAYER
+            faction=Faction.PLAYER,
+            class_type=class_type,
+            inventory=inventory,
+            equipped_weapon=equipped_weapon,
+            equipped_wearable=equipped_wearable
         )
+        
+        # Adjust HP based on wearable
+        player.hp = player.get_total_max_hp()
+        
         self.players[player_id] = player
         return player
 
@@ -232,7 +282,8 @@ class GameInstance:
                 return
             
             tile = self.grid[new_y][new_x]
-            if tile in [TileType.FLOOR, TileType.DOOR, TileType.STAIRS_UP, TileType.STAIRS_DOWN]:
+            if tile in [TileType.FLOOR, TileType.DOOR, TileType.STAIRS_UP, TileType.STAIRS_DOWN, 
+                        TileType.FLOOR_WOOD, TileType.FLOOR_WATER, TileType.FLOOR_COBBLE]:
                 # Monster safe room restriction
                 if not isinstance(entity, Player) and self._is_in_safe_room(new_x, new_y):
                     return
@@ -403,7 +454,8 @@ class GameInstance:
             for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
                 nx, ny = x + dx, y + dy
                 if (0 <= nx < self.width and 0 <= ny < self.height and 
-                    self.grid[ny][nx] in [TileType.FLOOR, TileType.DOOR, TileType.STAIRS_UP, TileType.STAIRS_DOWN] and 
+                    self.grid[ny][nx] in [TileType.FLOOR, TileType.DOOR, TileType.STAIRS_UP, TileType.STAIRS_DOWN,
+                                          TileType.FLOOR_WOOD, TileType.FLOOR_WATER, TileType.FLOOR_COBBLE] and 
                     (nx, ny) not in visited):
                     
                     # Check if another mob is there (friendly fire/blocking)
