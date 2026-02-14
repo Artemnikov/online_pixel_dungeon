@@ -188,8 +188,8 @@ function App() {
     let animationFrameId;
 
     const tileMap = {
-      1: { x: 0, y: 0 }, // Wall
-      2: { x: 0, y: 3 }, // Floor
+      1: { x: 0, y: 3 }, // Wall
+      2: { x: 0, y: 0 }, // Floor
     };
 
     const drawGrid = () => {
