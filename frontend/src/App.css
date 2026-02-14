@@ -166,6 +166,17 @@
   transition: width 0.3s ease-out;
 }
 
+.health-bar-fill.downed {
+  background: #7f8c8d;
+  /* Gray for downed */
+}
+
+.health-bar-fill.regen {
+  background: #f1c40f;
+  /* Yellow for regen */
+  box-shadow: 0 0 10px #f1c40f;
+}
+
 .health-text {
   position: absolute;
   top: 50%;

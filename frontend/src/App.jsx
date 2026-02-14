@@ -64,7 +64,9 @@ function App() {
             setMyStats({
               hp: p.hp,
               maxHp: p.max_hp + healthBoost,
-              name: p.name
+              name: p.name,
+              isDowned: p.is_downed,
+              isRegen: (p.regen_ticks || 0) > 0
             })
           }
 
@@ -234,8 +236,13 @@ function App() {
         const isPlayerVisible = visionRef.current.visible.has(`${Math.round(player.renderPos.x)},${Math.round(player.renderPos.y)}`) || player.id === myPlayerId
         if (!isPlayerVisible) return
 
-        ctx.fillStyle = player.id === myPlayerId ? '#2ecc71' : '#3498db'
-        ctx.fillRect(player.renderPos.x * TILE_SIZE + 2, player.renderPos.y * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4)
+        if (player.is_downed) {
+          ctx.fillStyle = '#7f8c8d' // Gray for downed
+          ctx.fillRect(player.renderPos.x * TILE_SIZE + 2, player.renderPos.y * TILE_SIZE + 8, TILE_SIZE - 4, TILE_SIZE - 10)
+        } else {
+          ctx.fillStyle = player.id === myPlayerId ? '#2ecc71' : '#3498db'
+          ctx.fillRect(player.renderPos.x * TILE_SIZE + 2, player.renderPos.y * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4)
+        }
 
         // Draw Player HP Bar
         const hpBarWidth = TILE_SIZE - 4
@@ -243,8 +250,23 @@ function App() {
         const playerHpPercent = player.hp / (player.max_hp + healthBoost)
         ctx.fillStyle = '#111'
         ctx.fillRect(player.renderPos.x * TILE_SIZE + 2, player.renderPos.y * TILE_SIZE - 12, hpBarWidth, 4)
-        ctx.fillStyle = '#2ecc71'
+
+        if (player.is_downed) {
+          ctx.fillStyle = '#e74c3c' // Red for downed HP bar
+        } else if (player.regen_ticks > 0) {
+          ctx.fillStyle = '#f1c40f' // Yellow for regenerating
+        } else {
+          ctx.fillStyle = '#2ecc71'
+        }
+
         ctx.fillRect(player.renderPos.x * TILE_SIZE + 2, player.renderPos.y * TILE_SIZE - 12, hpBarWidth * playerHpPercent, 4)
+
+        // Show "DOWNED" text for teammates to see
+        if (player.is_downed) {
+          ctx.fillStyle = '#e74c3c'
+          ctx.font = 'bold 10px Arial'
+          ctx.fillText("DOWNED", player.renderPos.x * TILE_SIZE + TILE_SIZE / 2, player.renderPos.y * TILE_SIZE - 25)
+        }
 
         ctx.fillStyle = 'white'
         ctx.font = '10px Arial'
@@ -273,6 +295,10 @@ function App() {
     if (socketRef.current?.readyState === WebSocket.OPEN) {
       socketRef.current.send(JSON.stringify({ type: 'CHANGE_DIFFICULTY', difficulty: level }))
     }
+  }
+
+  const useItem = (itemId) => {
+    socketRef.current.send(JSON.stringify({ type: 'USE_ITEM', item_id: itemId }))
   }
 
   return (
@@ -313,7 +339,12 @@ function App() {
                     {item.type === 'weapon' ? `Dmg: ${item.damage}` : `HP+: ${item.health_boost}`}
                   </div>
                   <div className="item-actions">
-                    <button onClick={() => equipItem(item.id)}>Equip</button>
+                    {item.type === 'potion' && (
+                      <button className="use-btn" onClick={() => useItem(item.id)}>Drink</button>
+                    )}
+                    {item.type !== 'potion' && (
+                      <button onClick={() => equipItem(item.id)}>Equip</button>
+                    )}
                     <button onClick={() => dropItem(item.id)}>Drop</button>
                   </div>
                 </div>
@@ -330,7 +361,7 @@ function App() {
         <div className="bottom-left-hud">
           <div className="health-bar-container">
             <div
-              className="health-bar-fill"
+              className={`health-bar-fill ${myStats.isDowned ? 'downed' : myStats.isRegen ? 'regen' : ''}`}
               style={{ width: `${(myStats.hp / myStats.maxHp) * 100}%` }}
             ></div>
             <div className="health-text">{Math.ceil(myStats.hp)} / {myStats.maxHp} HP</div>

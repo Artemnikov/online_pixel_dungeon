@@ -6,6 +6,7 @@ class EntityType:
     MOB = "mob"
     BOSS = "boss"
     ITEM = "item"
+    POTION = "potion"
 
 class Faction:
     PLAYER = "player"
@@ -43,7 +44,7 @@ class Entity(BaseModel):
 class Item(BaseModel):
     id: str
     name: str
-    type: str # "weapon" or "wearable"
+    type: str # "weapon", "wearable", "potion"
     pos: Optional[Position] = None
 
 class Weapon(Item):
@@ -58,6 +59,18 @@ class Wearable(Item):
     strength_requirement: int
     health_boost: int
     enchantment: Optional[str] = None
+
+class Potion(Item):
+    type: str = EntityType.POTION
+    effect: str
+
+class RevivingPotion(Potion):
+    effect: str = "revive"
+    name: str = "Reviving Potion"
+
+class HealthPotion(Potion):
+    effect: str = "regen"
+    name: str = "Health Potion"
 
 class Difficulty:
     EASY = "easy"
@@ -81,6 +94,20 @@ class Player(Entity):
     equipped_weapon: Optional[Weapon] = None
     equipped_wearable: Optional[Wearable] = None
     websocket_id: Optional[str] = None
+    is_downed: bool = False
+    regen_ticks: int = 0
+
+    def take_damage(self, amount: int):
+        if self.is_downed:
+            return 0
+            
+        dmg = max(0, amount - self.get_total_defense())
+        self.hp -= dmg
+        if self.hp <= 0:
+            self.hp = 0
+            self.is_downed = True
+            # Player is not "dead" (is_alive remains True for DBNO)
+        return dmg
 
     def get_total_attack(self) -> int:
         bonus = 0

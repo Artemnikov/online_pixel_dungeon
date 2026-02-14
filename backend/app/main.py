@@ -125,6 +125,19 @@ async def game_websocket(websocket: WebSocket, game_id: str):
             elif message["type"] == "CHANGE_DIFFICULTY":
                 new_difficulty = message["difficulty"]
                 game.change_difficulty(new_difficulty)
+
+            elif message["type"] == "USE_ITEM":
+                item_id = message["item_id"]
+                if player_id in game.players:
+                    player = game.players[player_id]
+                    item_idx = next((i for i, item in enumerate(player.inventory) if item.id == item_id), -1)
+                    if item_idx != -1:
+                        item = player.inventory[item_idx]
+                        if item.type == "potion":
+                            # Use potion
+                            if getattr(item, "effect", "") == "regen":
+                                player.regen_ticks = 50 # 50 ticks of regeneration
+                                player.inventory.pop(item_idx)
     except WebSocketDisconnect:
         manager.disconnect(game_id, websocket)
         if player_id in game.players:

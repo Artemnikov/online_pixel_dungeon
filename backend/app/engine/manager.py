@@ -2,7 +2,7 @@ import uuid
 import random
 from typing import Dict, List, Optional, Tuple
 from app.engine.dungeon.generator import DungeonGenerator, TileType
-from app.engine.entities.base import Player, Mob, Position, EntityType, Mob as MobEntity, Item, Weapon, Wearable, Faction, Difficulty
+from app.engine.entities.base import Player, Mob, Position, EntityType, Mob as MobEntity, Item, Weapon, Wearable, Faction, Difficulty, HealthPotion, RevivingPotion
 
 class GameInstance:
     def __init__(self, game_id: str):
@@ -53,13 +53,14 @@ class GameInstance:
             )
 
         # Spawn Items
-        num_items = 3 + random.randint(0, 2)
+        num_items = 4 + random.randint(0, 3)
         for _ in range(num_items):
             if not floor_tiles: break
             x, y = floor_tiles.pop(random.randint(0, len(floor_tiles) - 1))
             item_id = str(uuid.uuid4())
             
-            if random.random() < 0.5:
+            rand = random.random()
+            if rand < 0.3:
                 # Weapon
                 self.items[item_id] = Weapon(
                     id=item_id,
@@ -69,7 +70,7 @@ class GameInstance:
                     range=1,
                     strength_requirement=10 + random.randint(-2, 2)
                 )
-            else:
+            elif rand < 0.6:
                 # Wearable
                 self.items[item_id] = Wearable(
                     id=item_id,
@@ -77,6 +78,18 @@ class GameInstance:
                     pos=Position(x=x, y=y),
                     strength_requirement=10 + random.randint(-2, 2),
                     health_boost=5 + random.randint(0, 5)
+                )
+            elif rand < 0.8:
+                # Health Potion
+                self.items[item_id] = HealthPotion(
+                    id=item_id,
+                    pos=Position(x=x, y=y)
+                )
+            else:
+                # Reviving Potion
+                self.items[item_id] = RevivingPotion(
+                    id=item_id,
+                    pos=Position(x=x, y=y)
                 )
 
     def _spawn_boss(self, floor_tiles):
@@ -121,6 +134,10 @@ class GameInstance:
         entity = self.players.get(entity_id) or self.mobs.get(entity_id)
         if not entity: return
         
+        # Downed players can't move
+        if isinstance(entity, Player) and entity.is_downed:
+            return
+        
         new_x = entity.pos.x + dx
         new_y = entity.pos.y + dy
         
@@ -139,8 +156,22 @@ class GameInstance:
                         break
             
             if target_entity:
+                # Teammate revive check
+                if (isinstance(entity, Player) and isinstance(target_entity, Player) and 
+                    target_entity.is_downed and entity.faction == target_entity.faction):
+                    # Check for Reviving Potion in inventory
+                    revive_potion_idx = next((i for i, item in enumerate(entity.inventory) if isinstance(item, RevivingPotion)), -1)
+                    if revive_potion_idx != -1:
+                        entity.inventory.pop(revive_potion_idx)
+                        target_entity.is_downed = False
+                        target_entity.hp = target_entity.get_total_max_hp() // 2
+                        return
+
                 # Combat! Only if different factions
                 if entity.faction != target_entity.faction:
+                    if isinstance(entity, Player) and entity.is_downed:
+                        return # Downed players can't attack
+
                     attack_power = entity.attack
                     if isinstance(entity, Player):
                         attack_power = entity.get_total_attack()
@@ -177,6 +208,18 @@ class GameInstance:
             # Or we can send a special event. For now, we'll assume the client detects INIT or map change.
 
     def update_tick(self):
+        # Update Players (Regen)
+        for player in self.players.values():
+            if player.is_downed or not player.is_alive:
+                continue
+            
+            if player.regen_ticks > 0:
+                player.regen_ticks -= 1
+                # 50% max HP over 50 ticks? (approx 2.5 seconds at 20 ticks/sec or 5 seconds at 10 ticks/sec)
+                # sleep is 0.05, so approx 20 ticks per second. 50 ticks = 2.5 seconds.
+                regen_amount = (player.get_total_max_hp() * 0.5) / 50
+                player.hp = min(player.get_total_max_hp(), player.hp + regen_amount)
+
         for mob in self.mobs.values():
             if not mob.is_alive: continue
             
