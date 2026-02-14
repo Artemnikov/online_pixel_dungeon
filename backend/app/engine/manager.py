@@ -39,19 +39,52 @@ class GameInstance:
         self.items = {}
         self._spawn_content()
 
+
+    def _is_in_safe_room(self, x: int, y: int) -> bool:
+        """
+        Check if a coordinate is within the start (entry) or end (exit) rooms.
+        Monsters should not spawn here or enter these rooms.
+        """
+        # We need to find which room contains (x, y)
+        # However, checking every room might be overkill if we just want Start/End
+        # Start Room is rooms[0], End Room is rooms[-1]
+        
+        if not self.rooms:
+            return False
+
+        start_room = self.rooms[0]
+        end_room = self.rooms[-1]
+        
+        # Check if in start room
+        if (start_room.x <= x < start_room.x + start_room.width and
+            start_room.y <= y < start_room.y + start_room.height):
+            return True
+        
+        # Check if in end room
+        if (end_room.x <= x < end_room.x + end_room.width and
+            end_room.y <= y < end_room.y + end_room.height):
+            return True
+            
+        return False
+
     def _spawn_content(self):
         floor_tiles = [(x, y) for y in range(self.height) for x in range(self.width) 
                        if self.grid[y][x] == TileType.FLOOR]
         
-        # Spawn Boss every 5 floors
+        # Filter out safe rooms for mobs
+        unsafe_floor_tiles = [pos for pos in floor_tiles if not self._is_in_safe_room(pos[0], pos[1])]
+        
+        # Spawn Boss every 5 floors - Bosses might need a special room, but for now use unsafe tiles
         if self.depth % 5 == 0:
-            self._spawn_boss(floor_tiles)
+            self._spawn_boss(unsafe_floor_tiles) # Use unsafe tiles for boss too? Or maybe boss has its own room logic?
+            # Existing logic just picks a random floor tile. Let's stick to unsafe for now.
         
         # Spawn Mobs
         num_mobs = 5 + (self.depth * 2)
         for _ in range(num_mobs):
-            if not floor_tiles: break
-            x, y = floor_tiles.pop(random.randint(0, len(floor_tiles) - 1))
+            if not unsafe_floor_tiles: break
+            # Use unsafe_floor_tiles for mobs
+            x, y = unsafe_floor_tiles.pop(random.randint(0, len(unsafe_floor_tiles) - 1))
             mob_id = str(uuid.uuid4())
             self.mobs[mob_id] = MobEntity(
                 id=mob_id,
@@ -64,7 +97,7 @@ class GameInstance:
                 faction=Faction.DUNGEON
             )
 
-        # Spawn Items
+        # Spawn Items - Items can be anywhere, including safe rooms
         num_items = 4 + random.randint(0, 3)
         for _ in range(num_items):
             if not floor_tiles: break
@@ -200,6 +233,10 @@ class GameInstance:
             
             tile = self.grid[new_y][new_x]
             if tile in [TileType.FLOOR, TileType.DOOR, TileType.STAIRS_UP, TileType.STAIRS_DOWN]:
+                # Monster safe room restriction
+                if not isinstance(entity, Player) and self._is_in_safe_room(new_x, new_y):
+                    return
+
                 entity.move(dx, dy)
                 if isinstance(entity, Player):
                     self.add_event("MOVE", {"entity": entity_id, "x": entity.pos.x, "y": entity.pos.y})
@@ -218,6 +255,12 @@ class GameInstance:
                     self.add_event("STAIRS_DOWN", {"player": entity_id})
                     self.next_floor()
 
+                # If player moves onto STAIRS_UP, go to prev floor
+                if entity_id in self.players and tile == TileType.STAIRS_UP:
+                    if self.depth > 1:
+                        self.add_event("STAIRS_UP", {"player": entity_id})
+                        self.prev_floor()
+
     def next_floor(self):
         if self.depth < 50:
             self.generate_floor(self.depth + 1)
@@ -225,10 +268,14 @@ class GameInstance:
             spawn_pos = self._get_stairs_pos(TileType.STAIRS_UP)
             for p in self.players.values():
                 p.pos = spawn_pos
-            
-            # We would need to notify clients that the map changed
-            # This will be handled by the next broadcast which should include INIT if needed
-            # Or we can send a special event. For now, we'll assume the client detects INIT or map change.
+
+    def prev_floor(self):
+        if self.depth > 1:
+            self.generate_floor(self.depth - 1)
+            # Reset player positions to STAIRS_DOWN (since we came from UP)
+            spawn_pos = self._get_stairs_pos(TileType.STAIRS_DOWN)
+            for p in self.players.values():
+                p.pos = spawn_pos
 
     def update_tick(self):
         # Update Players (Regen)
