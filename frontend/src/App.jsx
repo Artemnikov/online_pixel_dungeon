@@ -23,6 +23,7 @@ function App() {
   const [equippedItems, setEquippedItems] = useState({ weapon: null, wearable: null })
   const [myStats, setMyStats] = useState({ hp: 0, maxHp: 10, name: "" })
   const [difficulty, setDifficulty] = useState("normal")
+  const visionRef = useRef({ visible: new Set(), discovered: new Set() })
 
   useEffect(() => {
     const ws = new WebSocket(`ws://${window.location.hostname}:8000/ws/game/${gameId}`)
@@ -35,6 +36,7 @@ function App() {
       const data = JSON.parse(event.data)
       if (data.type === 'INIT') {
         setGrid(data.grid)
+        visionRef.current.discovered = new Set()
         setDimensions({ width: data.width * TILE_SIZE, height: data.height * TILE_SIZE })
         if (data.player_id) {
           setMyPlayerId(data.player_id)
@@ -96,6 +98,12 @@ function App() {
 
         // Sync items (for rendering on floor)
         entitiesRef.current.items = data.items || []
+
+        if (data.visible_tiles) {
+          const newVisible = new Set(data.visible_tiles.map(t => `${t[0]},${t[1]}`))
+          visionRef.current.visible = newVisible
+          newVisible.forEach(t => visionRef.current.discovered.add(t))
+        }
       }
     }
 
@@ -154,11 +162,26 @@ function App() {
           const tile = grid[y][x]
           if (tile === 0) continue // Skip VOID
 
-          if (tile === 1) ctx.fillStyle = '#444' // WALL
-          else if (tile === 2) ctx.fillStyle = '#222' // FLOOR
-          else if (tile === 3) ctx.fillStyle = '#855' // DOOR
-          else if (tile === 4) ctx.fillStyle = '#aa4' // STAIRS_UP
-          else if (tile === 5) ctx.fillStyle = '#4aa' // STAIRS_DOWN
+          const key = `${x},${y}`
+          const isVisible = visionRef.current.visible.has(key)
+          const isDiscovered = visionRef.current.discovered.has(key)
+
+          if (!isDiscovered) {
+            ctx.fillStyle = 'black'
+          } else {
+            if (tile === 1) ctx.fillStyle = '#444' // WALL
+            else if (tile === 2) ctx.fillStyle = '#222' // FLOOR
+            else if (tile === 3) ctx.fillStyle = '#855' // DOOR
+            else if (tile === 4) ctx.fillStyle = '#aa4' // STAIRS_UP
+            else if (tile === 5) ctx.fillStyle = '#4aa' // STAIRS_DOWN
+
+            // If not visible but discovered, darken the tile (Fog of War)
+            if (!isVisible) {
+              // Draw the tile normally first, then overlay with semi-transparent black
+              ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+              ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'
+            }
+          }
 
           ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
         }
@@ -167,6 +190,9 @@ function App() {
       // Draw Items on Floor
       if (entitiesRef.current.items) {
         entitiesRef.current.items.forEach(item => {
+          // Only draw visible items
+          if (!visionRef.current.visible.has(`${item.pos.x},${item.pos.y}`)) return
+
           ctx.fillStyle = item.type === 'weapon' ? '#f1c40f' : '#9b59b6'
           ctx.beginPath()
           ctx.arc(item.pos.x * TILE_SIZE + TILE_SIZE / 2, item.pos.y * TILE_SIZE + TILE_SIZE / 2, 6, 0, Math.PI * 2)
@@ -176,6 +202,9 @@ function App() {
 
       // Update and Draw Mobs
       Object.values(entitiesRef.current.mobs).forEach(mob => {
+        // Only draw visible mobs
+        if (!visionRef.current.visible.has(`${Math.round(mob.renderPos.x)},${Math.round(mob.renderPos.y)}`)) return
+
         // Interpolate position
         if (mob.targetPos) {
           mob.renderPos.x += (mob.targetPos.x - mob.renderPos.x) * INTERPOLATION_SPEED
@@ -201,6 +230,9 @@ function App() {
           player.renderPos.x += (player.targetPos.x - player.renderPos.x) * INTERPOLATION_SPEED
           player.renderPos.y += (player.targetPos.y - player.renderPos.y) * INTERPOLATION_SPEED
         }
+
+        const isPlayerVisible = visionRef.current.visible.has(`${Math.round(player.renderPos.x)},${Math.round(player.renderPos.y)}`) || player.id === myPlayerId
+        if (!isPlayerVisible) return
 
         ctx.fillStyle = player.id === myPlayerId ? '#2ecc71' : '#3498db'
         ctx.fillRect(player.renderPos.x * TILE_SIZE + 2, player.renderPos.y * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4)

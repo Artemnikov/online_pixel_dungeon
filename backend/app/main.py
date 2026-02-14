@@ -10,16 +10,17 @@ app = FastAPI(title="Online Pixel Dungeon API")
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: Dict[str, List[WebSocket]] = {}
+        # game_id -> {websocket: player_id}
+        self.active_connections: Dict[str, Dict[WebSocket, str]] = {}
         self.game_instances: Dict[str, GameInstance] = {}
 
     async def connect(self, game_id: str, websocket: WebSocket, player_id: str):
         await websocket.accept()
         if game_id not in self.active_connections:
-            self.active_connections[game_id] = []
+            self.active_connections[game_id] = {}
             self.game_instances[game_id] = GameInstance(game_id)
         
-        self.active_connections[game_id].append(websocket)
+        self.active_connections[game_id][websocket] = player_id
         
         game = self.game_instances[game_id]
         await websocket.send_json({
@@ -33,7 +34,8 @@ class ConnectionManager:
 
     def disconnect(self, game_id: str, websocket: WebSocket):
         if game_id in self.active_connections:
-            self.active_connections[game_id].remove(websocket)
+            if websocket in self.active_connections[game_id]:
+                del self.active_connections[game_id][websocket]
             if not self.active_connections[game_id]:
                 del self.active_connections[game_id]
 
@@ -43,13 +45,14 @@ class ConnectionManager:
             
             old_depth = getattr(game, "_last_broadcast_depth", 0)
             game.update_tick()
-            state = game.get_state()
             
-            new_depth = state["depth"]
+            new_depth = game.depth
             game._last_broadcast_depth = new_depth
             
-            for connection in self.active_connections[game_id]:
+            for connection, player_id in self.active_connections[game_id].items():
                 try:
+                    state = game.get_state(player_id)
+                    
                     # If depth changed, send INIT-like update with grid
                     if new_depth != old_depth:
                         await connection.send_json({
@@ -65,9 +68,12 @@ class ConnectionManager:
                         "depth": new_depth,
                         "difficulty": game.difficulty,
                         "players": state["players"],
-                        "mobs": state["mobs"]
+                        "mobs": state["mobs"],
+                        "items": state.get("items", []),
+                        "visible_tiles": state.get("visible_tiles", [])
                     })
-                except:
+                except Exception as e:
+                    print(f"Error broadcasting to {player_id}: {e}")
                     pass
 
 manager = ConnectionManager()

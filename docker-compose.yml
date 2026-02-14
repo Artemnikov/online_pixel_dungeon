@@ -11,7 +11,7 @@ services:
   frontend:
     build: ./frontend
     ports:
-      - "5173:5173"
+      - "3000:5173"
     volumes:
       - ./frontend:/app
       - /app/node_modules # Don't overwrite node_modules with host mount

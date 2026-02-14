@@ -313,7 +313,35 @@ class GameInstance:
         if new_level in [Difficulty.EASY, Difficulty.NORMAL, Difficulty.HARD]:
             self.difficulty = new_level
 
-    def get_state(self):
+    def get_visible_tiles(self, pos: Position, radius: int = 8) -> List[Tuple[int, int]]:
+        visible = []
+        for dy in range(-radius, radius + 1):
+            for dx in range(-radius, radius + 1):
+                tx, ty = pos.x + dx, pos.y + dy
+                if 0 <= tx < self.width and 0 <= ty < self.height:
+                    dist_sq = dx*dx + dy*dy
+                    if dist_sq <= radius*radius:
+                        if self._is_in_los(pos, Position(x=tx, y=ty)):
+                            visible.append((tx, ty))
+        return visible
+
+    def get_state(self, player_id: Optional[str] = None):
+        if player_id and player_id in self.players:
+            player = self.players[player_id]
+            visible_tiles = self.get_visible_tiles(player.pos)
+            visible_set = set(visible_tiles)
+            
+            return {
+                "depth": self.depth,
+                "players": [p.dict() for p in self.players.values()], # Players always visible for now? Or maybe only if in LOS?
+                # For multiplayer, usually you see all players on the current screen/map, 
+                # but Pixel Dungeon style might be only in LOS. Let's stick to LOS for Mobs/Items.
+                "mobs": [m.dict() for m in self.mobs.values() if m.is_alive and (m.pos.x, m.pos.y) in visible_set],
+                "items": [i.dict() for i in self.items.values() if (i.pos.x, i.pos.y) in visible_set],
+                "visible_tiles": visible_tiles,
+                "grid": self.grid # Still sending full grid for now, rendering handles discovery
+            }
+
         return {
             "depth": self.depth,
             "players": [p.dict() for p in self.players.values()],
