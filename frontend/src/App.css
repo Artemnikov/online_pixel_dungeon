@@ -229,6 +229,38 @@
   font-size: 12px;
 }
 
+.bottom-right-hud {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.difficulty-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.difficulty-select {
+  background: #333;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 4px;
+  padding: 2px 5px;
+  cursor: pointer;
+  outline: none;
+  font-size: 14px;
+}
+
+.difficulty-select:hover {
+  border-color: #2ecc71;
+}
+
 /* Loading Screen */
 .loading-screen {
   position: fixed;

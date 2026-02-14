@@ -28,9 +28,10 @@ class DungeonGenerator:
         self.width = width
         self.height = height
         self.grid = [[TileType.VOID for _ in range(width)] for _ in range(height)]
+        self.rooms: List[Room] = []
 
-    def generate(self, max_rooms: int, min_room_size: int, max_room_size: int) -> List[List[int]]:
-        rooms: List[Room] = []
+    def generate(self, max_rooms: int, min_room_size: int, max_room_size: int) -> Tuple[List[List[int]], List[Room]]:
+        self.rooms = []
         
         for _ in range(max_rooms):
             w = random.randint(min_room_size, max_room_size)
@@ -41,27 +42,27 @@ class DungeonGenerator:
             new_room = Room(x, y, w, h)
             
             # Check for intersections
-            if any(new_room.intersects(other) for other in rooms):
+            if any(new_room.intersects(other) for other in self.rooms):
                 continue
             
             self._create_room(new_room)
             
-            if rooms:
+            if self.rooms:
                 # Connect to previous room
-                prev_center = rooms[-1].center
+                prev_center = self.rooms[-1].center
                 new_center = new_room.center
                 self._create_tunnel(prev_center, new_center)
             
-            rooms.append(new_room)
+            self.rooms.append(new_room)
         
         # Add stairs
-        if rooms:
-            up_x, up_y = rooms[0].center
-            down_x, down_y = rooms[-1].center
+        if self.rooms:
+            up_x, up_y = self.rooms[0].center
+            down_x, down_y = self.rooms[-1].center
             self.grid[up_y][up_x] = TileType.STAIRS_UP
             self.grid[down_y][down_x] = TileType.STAIRS_DOWN
 
-        return self.grid
+        return self.grid, self.rooms
 
     def _create_room(self, room: Room):
         for y in range(room.y, room.y + room.height):

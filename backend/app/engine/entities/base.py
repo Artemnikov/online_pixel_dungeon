@@ -59,11 +59,17 @@ class Wearable(Item):
     health_boost: int
     enchantment: Optional[str] = None
 
+class Difficulty:
+    EASY = "easy"
+    NORMAL = "normal"
+    HARD = "hard"
+
 class Mob(Entity):
     type: str = EntityType.MOB
     faction: str = Faction.DUNGEON
     ai_state: str = "idle"
     target_id: Optional[str] = None
+    difficulty: str = Difficulty.NORMAL
 
 class Player(Entity):
     type: str = EntityType.PLAYER

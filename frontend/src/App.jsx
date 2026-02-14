@@ -22,6 +22,7 @@ function App() {
   const [inventory, setInventory] = useState([])
   const [equippedItems, setEquippedItems] = useState({ weapon: null, wearable: null })
   const [myStats, setMyStats] = useState({ hp: 0, maxHp: 10, name: "" })
+  const [difficulty, setDifficulty] = useState("normal")
 
   useEffect(() => {
     const ws = new WebSocket(`ws://${window.location.hostname}:8000/ws/game/${gameId}`)
@@ -40,6 +41,7 @@ function App() {
           myPlayerIdRef.current = data.player_id
         }
       } else if (data.type === 'STATE_UPDATE') {
+        if (data.difficulty) setDifficulty(data.difficulty)
         // Sync players
         const currentServerPlayerIds = new Set(data.players.map(p => p.id))
         Object.keys(entitiesRef.current.players).forEach(id => {
@@ -235,6 +237,12 @@ function App() {
     socketRef.current.send(JSON.stringify({ type: 'DROP_ITEM', item_id: itemId }))
   }
 
+  const changeDifficulty = (level) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'CHANGE_DIFFICULTY', difficulty: level }))
+    }
+  }
+
   return (
     <div className="game-container">
       {grid.length === 0 && (
@@ -308,6 +316,21 @@ function App() {
               <span className="label">Armor:</span>
               <span className="value">{equippedItems.wearable?.name || "None"}</span>
             </div>
+          </div>
+        </div>
+
+        <div className="bottom-right-hud">
+          <div className="difficulty-selector">
+            <span className="label">Difficulty:</span>
+            <select
+              value={difficulty}
+              onChange={(e) => changeDifficulty(e.target.value)}
+              className="difficulty-select"
+            >
+              <option value="easy">Easy</option>
+              <option value="normal">Normal</option>
+              <option value="hard">Hard</option>
+            </select>
           </div>
         </div>
 

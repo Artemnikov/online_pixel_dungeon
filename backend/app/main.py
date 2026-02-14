@@ -63,6 +63,7 @@ class ConnectionManager:
                     await connection.send_json({
                         "type": "STATE_UPDATE",
                         "depth": new_depth,
+                        "difficulty": game.difficulty,
                         "players": state["players"],
                         "mobs": state["mobs"]
                     })
@@ -112,10 +113,12 @@ async def game_websocket(websocket: WebSocket, game_id: str):
                         item = player.inventory.pop(item_idx)
                         item.pos = Position(x=player.pos.x, y=player.pos.y)
                         game.items[item.id] = item
-                        if player.equipped_weapon and player.equipped_weapon.id == item_id:
-                            player.equipped_weapon = None
                         if player.equipped_wearable and player.equipped_wearable.id == item_id:
                             player.equipped_wearable = None
+            
+            elif message["type"] == "CHANGE_DIFFICULTY":
+                new_difficulty = message["difficulty"]
+                game.change_difficulty(new_difficulty)
     except WebSocketDisconnect:
         manager.disconnect(game_id, websocket)
         if player_id in game.players:

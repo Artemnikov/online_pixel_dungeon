@@ -1,8 +1,8 @@
 import uuid
 import random
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from app.engine.dungeon.generator import DungeonGenerator, TileType
-from app.engine.entities.base import Player, Mob, Position, EntityType, Mob as MobEntity, Item, Weapon, Wearable, Faction
+from app.engine.entities.base import Player, Mob, Position, EntityType, Mob as MobEntity, Item, Weapon, Wearable, Faction, Difficulty
 
 class GameInstance:
     def __init__(self, game_id: str):
@@ -14,13 +14,15 @@ class GameInstance:
         self.mobs: Dict[str, MobEntity] = {}
         self.items: Dict[str, Item] = {}
         self.grid = []
+        self.rooms = []
+        self.difficulty = Difficulty.NORMAL
         
         self.generate_floor(1)
 
     def generate_floor(self, depth: int):
         self.depth = depth
         self.generator = DungeonGenerator(self.width, self.height)
-        self.grid = self.generator.generate(10 + depth, 4, 8 + (depth // 10))
+        self.grid, self.rooms = self.generator.generate(10 + depth, 4, 8 + (depth // 10))
         self.mobs = {}
         self.items = {}
         self._spawn_content()
@@ -177,9 +179,139 @@ class GameInstance:
     def update_tick(self):
         for mob in self.mobs.values():
             if not mob.is_alive: continue
-            if random.random() < 0.1:
-                dx, dy = random.choice([(0,1), (0,-1), (1,0), (-1,0)])
-                self.move_entity(mob.id, dx, dy)
+            
+            # Simple AI logic based on difficulty
+            target_player = self._find_nearest_player(mob.pos)
+            dist = self._get_distance(mob.pos, target_player.pos) if target_player else float('inf')
+            
+            # Difficulty-specific behavior
+            moved = False
+            
+            if self.difficulty == Difficulty.EASY:
+                # Roam randomly, attack if adjacent
+                if target_player and dist <= 1:
+                    dx, dy = target_player.pos.x - mob.pos.x, target_player.pos.y - mob.pos.y
+                    self.move_entity(mob.id, dx, dy)
+                    moved = True
+                elif random.random() < 0.05:
+                    dx, dy = random.choice([(0,1), (0,-1), (1,0), (-1,0)])
+                    self.move_entity(mob.id, dx, dy)
+                    moved = True
+
+            elif self.difficulty == Difficulty.NORMAL:
+                # Chase if in LOS, move towards player
+                if target_player and dist <= 1:
+                    dx, dy = target_player.pos.x - mob.pos.x, target_player.pos.y - mob.pos.y
+                    self.move_entity(mob.id, dx, dy)
+                    moved = True
+                elif target_player and self._is_in_los(mob.pos, target_player.pos):
+                    # Move towards player if in LOS
+                    step = self._get_next_step_to(mob.pos, target_player.pos)
+                    if step:
+                        self.move_entity(mob.id, step[0], step[1])
+                        moved = True
+                elif random.random() < 0.05:
+                    dx, dy = random.choice([(0,1), (0,-1), (1,0), (-1,0)])
+                    self.move_entity(mob.id, dx, dy)
+                    moved = True
+
+            elif self.difficulty == Difficulty.HARD:
+                # Hunt across room (dist < 20), pathfinding
+                if target_player and dist <= 1:
+                    dx, dy = target_player.pos.x - mob.pos.x, target_player.pos.y - mob.pos.y
+                    self.move_entity(mob.id, dx, dy)
+                    moved = True
+                elif target_player and dist < 20:
+                    # Pathfind to player
+                    step = self._get_next_step_to(mob.pos, target_player.pos)
+                    if step:
+                        self.move_entity(mob.id, step[0], step[1])
+                        moved = True
+                elif random.random() < 0.05:
+                    dx, dy = random.choice([(0,1), (0,-1), (1,0), (-1,0)])
+                    self.move_entity(mob.id, dx, dy)
+                    moved = True
+
+    def _find_nearest_player(self, pos: Position) -> Optional[Player]:
+        if not self.players: return None
+        nearest = None
+        min_dist = float('inf')
+        for p in self.players.values():
+            d = self._get_distance(pos, p.pos)
+            if d < min_dist:
+                min_dist = d
+                nearest = p
+        return nearest
+
+    def _get_distance(self, p1: Position, p2: Position) -> int:
+        return abs(p1.x - p2.x) + abs(p1.y - p2.y)
+
+    def _is_in_los(self, p1: Position, p2: Position) -> bool:
+        # Bresenham's line algorithm to check LOS
+        x1, y1 = p1.x, p1.y
+        x2, y2 = p2.x, p2.y
+        dx = abs(x2 - x1)
+        dy = -abs(y2 - y1)
+        sx = 1 if x1 < x2 else -1
+        sy = 1 if y1 < y2 else -1
+        err = dx + dy
+        
+        curr_x, curr_y = x1, y1
+        while True:
+            if curr_x == x2 and curr_y == y2:
+                return True
+            
+            # Check for WALL
+            if 0 <= curr_x < self.width and 0 <= curr_y < self.height:
+                if self.grid[curr_y][curr_x] == TileType.WALL:
+                    return False
+            
+            e2 = 2 * err
+            if e2 >= dy:
+                err += dy
+                curr_x += sx
+            if e2 <= dx:
+                err += dx
+                curr_y += sy
+
+    def _get_next_step_to(self, start: Position, target: Position) -> Optional[tuple]:
+        # Simple BFS for pathfinding
+        queue = [(start.x, start.y, [])]
+        visited = set([(start.x, start.y)])
+        
+        while queue:
+            x, y, path = queue.pop(0)
+            
+            if x == target.x and y == target.y:
+                if path:
+                    return path[0]
+                return None
+            
+            for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                nx, ny = x + dx, y + dy
+                if (0 <= nx < self.width and 0 <= ny < self.height and 
+                    self.grid[ny][nx] in [TileType.FLOOR, TileType.DOOR, TileType.STAIRS_UP, TileType.STAIRS_DOWN] and 
+                    (nx, ny) not in visited):
+                    
+                    # Check if another mob is there (friendly fire/blocking)
+                    blocked = False
+                    for m in self.mobs.values():
+                        if m.is_alive and m.pos.x == nx and m.pos.y == ny:
+                            blocked = True
+                            break
+                    
+                    if not blocked:
+                        visited.add((nx, ny))
+                        queue.append((nx, ny, path + [(dx, dy)]))
+                        
+            # Limit search depth for performance
+            if len(visited) > 400:
+                break
+        return None
+
+    def change_difficulty(self, new_level: str):
+        if new_level in [Difficulty.EASY, Difficulty.NORMAL, Difficulty.HARD]:
+            self.difficulty = new_level
 
     def get_state(self):
         return {
