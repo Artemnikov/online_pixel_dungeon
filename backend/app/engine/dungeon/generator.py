@@ -40,28 +40,40 @@ class DungeonGenerator:
     def generate(self, max_rooms: int, min_room_size: int, max_room_size: int) -> Tuple[List[List[int]], List[Room]]:
         self.rooms = []
         
-        for _ in range(max_rooms):
-            w = random.randint(min_room_size, max_room_size)
-            h = random.randint(min_room_size, max_room_size)
-            x = random.randint(1, self.width - w - 1)
-            y = random.randint(1, self.height - h - 1)
+        # Retry loop for generation
+        max_retries = 10
+        for attempt in range(max_retries):
+            self.grid = [[TileType.VOID for _ in range(self.width)] for _ in range(self.height)]
+            self.rooms = []
+            
+            for _ in range(max_rooms):
+                w = random.randint(min_room_size, max_room_size)
+                h = random.randint(min_room_size, max_room_size)
+                x = random.randint(1, self.width - w - 1)
+                y = random.randint(1, self.height - h - 1)
 
-            new_room = Room(x, y, w, h)
+                new_room = Room(x, y, w, h)
+                
+                # Check for intersections
+                if any(new_room.intersects(other) for other in self.rooms):
+                    continue
+                
+                self._create_room(new_room)
+                
+                if self.rooms:
+                    # Connect to previous room
+                    prev_center = self.rooms[-1].center
+                    new_center = new_room.center
+                    self._create_tunnel(prev_center, new_center)
+                
+                self.rooms.append(new_room)
             
-            # Check for intersections
-            if any(new_room.intersects(other) for other in self.rooms):
+            if self.is_connected() and len(self.rooms) > 1:
+                break
+            else:
+                # Clear for retry
                 continue
-            
-            self._create_room(new_room)
-            
-            if self.rooms:
-                # Connect to previous room
-                prev_center = self.rooms[-1].center
-                new_center = new_room.center
-                self._create_tunnel(prev_center, new_center)
-            
-            self.rooms.append(new_room)
-        
+
         # Add stairs
         if self.rooms:
             up_x, up_y = self.rooms[0].center
@@ -70,6 +82,50 @@ class DungeonGenerator:
             self.grid[down_y][down_x] = TileType.STAIRS_DOWN
 
         return self.grid, self.rooms
+
+    def is_connected(self) -> bool:
+        if not self.rooms:
+            return True
+        
+        start_x, start_y = self.rooms[0].center
+        if self.grid[start_y][start_x] == TileType.WALL:
+             # Should not happen but just in case
+             return False
+
+        q = [(start_x, start_y)]
+        visited = set([(start_x, start_y)])
+        count = 0
+        
+        # We want to check if all ROOMS are reachable. 
+        # So let's count how many room centers we can reach.
+        reachable_rooms = set()
+        
+        # Mark start room as reachable
+        reachable_rooms.add(0)
+
+        while q:
+            cx, cy = q.pop(0)
+            
+            # Check if this tile is part of any room center
+            # Optimization: Pre-map room centers?
+            # Or just check at the end.
+            
+            for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                nx, ny = cx + dx, cy + dy
+                if 0 <= nx < self.width and 0 <= ny < self.height:
+                    if (nx, ny) not in visited:
+                        tile = self.grid[ny][nx]
+                        # Walkable tiles: FLOOR, DOOR, STAIRS, variants
+                        if tile != TileType.WALL and tile != TileType.VOID: # Assuming everything else is walkable
+                            visited.add((nx, ny))
+                            q.append((nx, ny))
+
+        # Now check if all room centers are in visited
+        for i, room in enumerate(self.rooms):
+            rx, ry = room.center
+            if (rx, ry) not in visited:
+                return False
+        return True
 
     def _create_room(self, room: Room):
         for y in range(room.y, room.y + room.height):
@@ -102,6 +158,9 @@ class DungeonGenerator:
         for x in range(min(x1, x2), max(x1, x2) + 1):
             if self.grid[y][x] == TileType.VOID:
                 self.grid[y][x] = TileType.FLOOR # Tunnels are standard floor
+            elif self.grid[y][x] == TileType.WALL:
+                 self.grid[y][x] = TileType.DOOR # Break through walls with doors or floor
+            
             # Surround with walls if void
             if y > 0 and self.grid[y-1][x] == TileType.VOID: self.grid[y-1][x] = TileType.WALL
             if y < self.height - 1 and self.grid[y+1][x] == TileType.VOID: self.grid[y+1][x] = TileType.WALL
@@ -110,6 +169,9 @@ class DungeonGenerator:
         for y in range(min(y1, y2), max(y1, y2) + 1):
             if self.grid[y][x] == TileType.VOID:
                 self.grid[y][x] = TileType.FLOOR
+            elif self.grid[y][x] == TileType.WALL:
+                 self.grid[y][x] = TileType.DOOR
+
             # Surround with walls if void
             if x > 0 and self.grid[y][x-1] == TileType.VOID: self.grid[y][x-1] = TileType.WALL
             if x < self.width - 1 and self.grid[y][x+1] == TileType.VOID: self.grid[y][x+1] = TileType.WALL
