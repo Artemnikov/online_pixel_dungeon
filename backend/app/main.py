@@ -70,7 +70,8 @@ class ConnectionManager:
                         "players": state["players"],
                         "mobs": state["mobs"],
                         "items": state.get("items", []),
-                        "visible_tiles": state.get("visible_tiles", [])
+                        "visible_tiles": state.get("visible_tiles", []),
+                        "events": game.flush_events()
                     })
                 except Exception as e:
                     print(f"Error broadcasting to {player_id}: {e}")
@@ -138,6 +139,7 @@ async def game_websocket(websocket: WebSocket, game_id: str):
                             if getattr(item, "effect", "") == "regen":
                                 player.regen_ticks = 50 # 50 ticks of regeneration
                                 player.inventory.pop(item_idx)
+                                game.add_event("DRINK", {"player": player_id, "type": "regen"})
     except WebSocketDisconnect:
         manager.disconnect(game_id, websocket)
         if player_id in game.players:

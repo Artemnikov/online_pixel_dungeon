@@ -5,6 +5,7 @@ import sewerTiles from './assets/pixel-dungeon/environment/tiles_sewers.png';
 import warriorSprite from './assets/pixel-dungeon/sprites/warrior.png';
 import ratSprite from './assets/pixel-dungeon/sprites/rat.png';
 import batSprite from './assets/pixel-dungeon/sprites/bat.png';
+import AudioManager from './audio/AudioManager';
 
 
 const TILE_SIZE = 32
@@ -28,6 +29,21 @@ function App() {
   const [showInventory, setShowInventory] = useState(false)
   const [inventory, setInventory] = useState([])
   const [equippedItems, setEquippedItems] = useState({ weapon: null, wearable: null })
+
+  useEffect(() => {
+    const enableAudio = () => {
+      AudioManager.play('SILENCE'); // Just to resume context if needed
+      window.removeEventListener('click', enableAudio);
+      window.removeEventListener('keydown', enableAudio);
+    };
+    window.addEventListener('click', enableAudio);
+    window.addEventListener('keydown', enableAudio);
+    return () => {
+      window.removeEventListener('click', enableAudio);
+      window.removeEventListener('keydown', enableAudio);
+    };
+  }, []);
+
   const [myStats, setMyStats] = useState({ hp: 0, maxHp: 10, name: "" })
   const [difficulty, setDifficulty] = useState("normal")
   const visionRef = useRef({ visible: new Set(), discovered: new Set() })
@@ -168,6 +184,18 @@ function App() {
           const newVisible = new Set(data.visible_tiles.map(t => `${t[0]},${t[1]}`))
           visionRef.current.visible = newVisible
           newVisible.forEach(t => visionRef.current.discovered.add(t))
+        }
+
+        if (data.events) {
+          data.events.forEach(event => {
+            if (event.type === 'MOVE') {
+              if (event.data.entity === myPlayerIdRef.current) {
+                AudioManager.play('MOVE');
+              }
+            } else {
+              AudioManager.play(event.type);
+            }
+          });
         }
       }
     }

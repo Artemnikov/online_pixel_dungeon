@@ -15,9 +15,21 @@ class GameInstance:
         self.items: Dict[str, Item] = {}
         self.grid = []
         self.rooms = []
+        self.events = []
         self.difficulty = Difficulty.NORMAL
         
         self.generate_floor(1)
+
+    def add_event(self, event_type: str, data: dict = None):
+        self.events.append({
+            "type": event_type,
+            "data": data or {}
+        })
+
+    def flush_events(self):
+        events = self.events
+        self.events = []
+        return events
 
     def generate_floor(self, depth: int):
         self.depth = depth
@@ -165,6 +177,7 @@ class GameInstance:
                         entity.inventory.pop(revive_potion_idx)
                         target_entity.is_downed = False
                         target_entity.hp = target_entity.get_total_max_hp() // 2
+                        self.add_event("REVIVE", {"target": target_entity.id, "source": entity.id})
                         return
 
                 # Combat! Only if different factions
@@ -176,12 +189,20 @@ class GameInstance:
                     if isinstance(entity, Player):
                         attack_power = entity.get_total_attack()
                     
+                    
                     dmg = target_entity.take_damage(attack_power)
+                    self.add_event("ATTACK", {"source": entity.id, "target": target_entity.id, "damage": dmg})
+                    if dmg > 0:
+                        self.add_event("DAMAGE", {"target": target_entity.id, "amount": dmg})
+                        if not target_entity.is_alive:
+                            self.add_event("DEATH", {"target": target_entity.id})
                 return
             
             tile = self.grid[new_y][new_x]
             if tile in [TileType.FLOOR, TileType.DOOR, TileType.STAIRS_UP, TileType.STAIRS_DOWN]:
                 entity.move(dx, dy)
+                if isinstance(entity, Player):
+                    self.add_event("MOVE", {"entity": entity_id, "x": entity.pos.x, "y": entity.pos.y})
 
                 # Player item pickup
                 if isinstance(entity, Player):
@@ -190,9 +211,11 @@ class GameInstance:
                         item = self.items[i_id]
                         if entity.add_to_inventory(item):
                             del self.items[i_id]
+                            self.add_event("PICKUP", {"player": entity.id, "item": item.id})
                 
                 # If player moves onto STAIRS_DOWN, go to next floor
                 if entity_id in self.players and tile == TileType.STAIRS_DOWN:
+                    self.add_event("STAIRS_DOWN", {"player": entity_id})
                     self.next_floor()
 
     def next_floor(self):
