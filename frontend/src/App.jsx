@@ -113,8 +113,12 @@ function App() {
           }
 
           if (!entitiesRef.current.players[p.id]) {
-            entitiesRef.current.players[p.id] = { ...p, renderPos: { x: p.pos.x, y: p.pos.y } }
+            entitiesRef.current.players[p.id] = { ...p, renderPos: { x: p.pos.x, y: p.pos.y }, facing: 'RIGHT' }
           } else {
+            const currentTarget = entitiesRef.current.players[p.id].targetPos || entitiesRef.current.players[p.id].renderPos;
+            if (p.pos.x > currentTarget.x) entitiesRef.current.players[p.id].facing = 'RIGHT';
+            else if (p.pos.x < currentTarget.x) entitiesRef.current.players[p.id].facing = 'LEFT';
+
             entitiesRef.current.players[p.id].targetPos = p.pos
             entitiesRef.current.players[p.id].name = p.name
             entitiesRef.current.players[p.id].hp = p.hp
@@ -138,8 +142,12 @@ function App() {
 
         data.mobs.forEach(m => {
           if (!entitiesRef.current.mobs[m.id]) {
-            entitiesRef.current.mobs[m.id] = { ...m, renderPos: { x: m.pos.x, y: m.pos.y } }
+            entitiesRef.current.mobs[m.id] = { ...m, renderPos: { x: m.pos.x, y: m.pos.y }, facing: 'RIGHT' }
           } else {
+            const currentTarget = entitiesRef.current.mobs[m.id].targetPos || entitiesRef.current.mobs[m.id].renderPos;
+            if (m.pos.x > currentTarget.x) entitiesRef.current.mobs[m.id].facing = 'RIGHT';
+            else if (m.pos.x < currentTarget.x) entitiesRef.current.mobs[m.id].facing = 'LEFT';
+
             entitiesRef.current.mobs[m.id].targetPos = m.pos
             entitiesRef.current.mobs[m.id].hp = m.hp
           }
@@ -261,29 +269,50 @@ function App() {
           mobSprite = assetImages.bat;
         }
 
+        const x = mob.renderPos.x * TILE_SIZE;
+        const y = mob.renderPos.y * TILE_SIZE;
+
         if (mobSprite) {
-          ctx.drawImage(
-            mobSprite,
-            0, // sx
-            0, // sy
-            TILE_SIZE / TILE_SCALE, // sWidth
-            TILE_SIZE / TILE_SCALE, // sHeight
-            mob.renderPos.x * TILE_SIZE,
-            mob.renderPos.y * TILE_SIZE,
-            TILE_SIZE,
-            TILE_SIZE
-          );
+          ctx.save();
+          if (mob.facing === 'LEFT') {
+            ctx.translate(x + TILE_SIZE, y);
+            ctx.scale(-1, 1);
+            ctx.drawImage(
+              mobSprite,
+              0, // sx
+              0, // sy
+              TILE_SIZE / TILE_SCALE, // sWidth
+              TILE_SIZE / TILE_SCALE, // sHeight
+              0, // dx (relative to translated origin)
+              0, // dy
+              TILE_SIZE,
+              TILE_SIZE
+            );
+          } else {
+            ctx.drawImage(
+              mobSprite,
+              0, // sx
+              0, // sy
+              TILE_SIZE / TILE_SCALE, // sWidth
+              TILE_SIZE / TILE_SCALE, // sHeight
+              x,
+              y,
+              TILE_SIZE,
+              TILE_SIZE
+            );
+          }
+          ctx.restore();
         } else {
           ctx.fillStyle = '#e74c3c';
-          ctx.fillRect(mob.renderPos.x * TILE_SIZE + 4, mob.renderPos.y * TILE_SIZE + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+          ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
         }
 
         const mobHpBarWidth = TILE_SIZE - 8;
         const mobHpPercent = (mob.hp || 0) / (mob.max_hp || 1);
         ctx.fillStyle = '#111';
-        ctx.fillRect(mob.renderPos.x * TILE_SIZE + 4, mob.renderPos.y * TILE_SIZE - 4, mobHpBarWidth, 3);
+        ctx.fillRect(x + 4, y - 4, mobHpBarWidth, 3);
         ctx.fillStyle = '#e74c3c';
-        ctx.fillRect(mob.renderPos.x * TILE_SIZE + 4, mob.renderPos.y * TILE_SIZE - 4, mobHpBarWidth * mobHpPercent, 3);
+        ctx.fillRect(x + 4, y - 4, mobHpBarWidth * mobHpPercent, 3);
       });
     };
 
@@ -297,38 +326,59 @@ function App() {
         const isPlayerVisible = visionRef.current.visible.has(`${Math.round(player.renderPos.x)},${Math.round(player.renderPos.y)}`) || player.id === myPlayerId;
         if (!isPlayerVisible) return;
 
+        const x = player.renderPos.x * TILE_SIZE;
+        const y = player.renderPos.y * TILE_SIZE;
+
         if (assetImages.warrior) {
-          ctx.drawImage(
-            assetImages.warrior,
-            0, // Source x
-            0, // Source y
-            TILE_SIZE / TILE_SCALE, // Source width
-            TILE_SIZE / TILE_SCALE, // Source height
-            player.renderPos.x * TILE_SIZE,
-            player.renderPos.y * TILE_SIZE,
-            TILE_SIZE,
-            TILE_SIZE
-          );
+          ctx.save();
+          if (player.facing === 'LEFT') {
+            ctx.translate(x + TILE_SIZE, y);
+            ctx.scale(-1, 1);
+            ctx.drawImage(
+              assetImages.warrior,
+              0, // Source x
+              0, // Source y
+              TILE_SIZE / TILE_SCALE, // Source width
+              TILE_SIZE / TILE_SCALE, // Source height
+              0, // dx
+              0, // dy
+              TILE_SIZE,
+              TILE_SIZE
+            );
+          } else {
+            ctx.drawImage(
+              assetImages.warrior,
+              0, // Source x
+              0, // Source y
+              TILE_SIZE / TILE_SCALE, // Source width
+              TILE_SIZE / TILE_SCALE, // Source height
+              x,
+              y,
+              TILE_SIZE,
+              TILE_SIZE
+            );
+          }
+          ctx.restore();
         }
 
         const hpBarWidth = TILE_SIZE - 4;
         const healthBoost = player.equipped_wearable ? player.equipped_wearable.health_boost : 0;
         const playerHpPercent = player.hp / (player.max_hp + healthBoost);
         ctx.fillStyle = '#111';
-        ctx.fillRect(player.renderPos.x * TILE_SIZE + 2, player.renderPos.y * TILE_SIZE - 12, hpBarWidth, 4);
+        ctx.fillRect(x + 2, y - 12, hpBarWidth, 4);
         ctx.fillStyle = player.is_downed ? '#e74c3c' : (player.regen_ticks > 0 ? '#f1c40f' : '#2ecc71');
-        ctx.fillRect(player.renderPos.x * TILE_SIZE + 2, player.renderPos.y * TILE_SIZE - 12, hpBarWidth * playerHpPercent, 4);
+        ctx.fillRect(x + 2, y - 12, hpBarWidth * playerHpPercent, 4);
 
         if (player.is_downed) {
           ctx.fillStyle = '#e74c3c';
           ctx.font = 'bold 10px Arial';
-          ctx.fillText("DOWNED", player.renderPos.x * TILE_SIZE + TILE_SIZE / 2, player.renderPos.y * TILE_SIZE - 25);
+          ctx.fillText("DOWNED", x + TILE_SIZE / 2, y - 25);
         }
 
         ctx.fillStyle = 'white';
         ctx.font = '10px Arial';
         ctx.textAlign = 'center';
-        ctx.fillText(player.name, player.renderPos.x * TILE_SIZE + TILE_SIZE / 2, player.renderPos.y * TILE_SIZE - 15);
+        ctx.fillText(player.name, x + TILE_SIZE / 2, y - 15);
       });
     };
 
@@ -509,9 +559,6 @@ function App() {
           {messages.slice(-3).map((msg, i) => (
             <div key={i} className="log-entry">{msg}</div>
           ))}
-        </div>
-        <div className="game-controls-hint">
-          Arrows/WASD to move. 'F' for Inventory.
         </div>
       </div>
 
