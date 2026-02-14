@@ -143,6 +143,14 @@ async def game_websocket(websocket: WebSocket, game_id: str, class_type: str = "
                                 player.regen_ticks = 50 # 50 ticks of regeneration
                                 player.inventory.pop(item_idx)
                                 game.add_event("DRINK", {"player": player_id, "type": "regen"})
+            
+            elif message["type"] == "RANGED_ATTACK":
+                item_id = message["item_id"]
+                target_x = message["target_x"]
+                target_y = message["target_y"]
+                game.perform_ranged_attack(player_id, item_id, target_x, target_y)
+
+
     except WebSocketDisconnect:
         manager.disconnect(game_id, websocket)
         if player_id in game.players:

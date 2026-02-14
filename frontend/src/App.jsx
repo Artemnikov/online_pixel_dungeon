@@ -17,6 +17,7 @@ import CharacterSelection from './CharacterSelection';
 const TILE_SIZE = 32
 const TILE_SCALE = 2; // scale factor to draw 16x16 assets at 32x32
 const INTERPOLATION_SPEED = 0.2 // Speed of moving towards server position
+const PROJECTILE_SPEED = 0.5; // Tiles per frame? No, that's slow. 15px/frame?
 
 // Item Sprite Mapping (Simplified based on ItemSpriteSheet.java)
 // Format: { name_keyword: [col, row] }
@@ -74,6 +75,8 @@ function App() {
   const [showInventory, setShowInventory] = useState(false)
   const [inventory, setInventory] = useState([])
   const [equippedItems, setEquippedItems] = useState({ weapon: null, wearable: null })
+  const [targetingMode, setTargetingMode] = useState(false)
+  const projectilesRef = useRef([])
 
   const [gameState, setGameState] = useState('SELECT'); // 'SELECT', 'PLAYING'
   const [selectedClass, setSelectedClass] = useState('warrior');
@@ -126,6 +129,118 @@ function App() {
     loadImage(ratSprite, 'rat');
     loadImage(batSprite, 'bat');
   }, []);
+
+  const equipItem = (itemId) => {
+    socketRef.current.send(JSON.stringify({ type: 'EQUIP_ITEM', item_id: itemId }))
+  }
+
+  const dropItem = (itemId) => {
+    socketRef.current.send(JSON.stringify({ type: 'DROP_ITEM', item_id: itemId }))
+  }
+
+  const changeDifficulty = (level) => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'CHANGE_DIFFICULTY', difficulty: level }))
+    }
+  }
+
+  const useItem = (itemId) => {
+    socketRef.current.send(JSON.stringify({ type: 'USE_ITEM', item_id: itemId }))
+  }
+
+  const handleCanvasClick = (e) => {
+    if (!targetingMode) return;
+    if (!canvasRef.current) return;
+
+    const rect = canvasRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    // Adjust for camera
+    const worldX = clickX + camera.x;
+    const worldY = clickY + camera.y;
+
+    const tileX = Math.floor(worldX / TILE_SIZE);
+    const tileY = Math.floor(worldY / TILE_SIZE);
+
+    // Fire!
+    if (equippedItems.weapon) {
+      socketRef.current.send(JSON.stringify({
+        type: 'RANGED_ATTACK',
+        item_id: equippedItems.weapon.id,
+        target_x: tileX,
+        target_y: tileY
+      }));
+      setTargetingMode(true); // Keep targeting on
+    }
+  };
+
+  const handleToolbarClick = (item) => {
+    if (!item) {
+      setShowInventory(true);
+      return;
+    }
+    if (item.type === 'potion') {
+      useItem(item.id);
+    } else {
+      // If it's a weapon
+      if (item.type === 'weapon') {
+        const isEquipped = equippedItems.weapon && equippedItems.weapon.id === item.id;
+
+        if (!isEquipped) {
+          equipItem(item.id);
+          // We can't immediately toggle targeting because state hasn't updated yet.
+          // But maybe we can optimistically set it if we trust the user intent?
+          // No, let's stick to: Click 1 = Equip. Click 2 = Target.
+          // However, user expected "Click 1" to work. 
+          // If we equip, we disable targeting mode of previous weapon.
+          setTargetingMode(false);
+        } else {
+          // Already equipped. Toggle targeting if ranged.
+          if (item.range && item.range > 1) {
+            setTargetingMode(prev => !prev);
+          }
+        }
+      } else if (item.type === 'wearable') {
+        equipItem(item.id);
+      }
+    }
+  };
+
+  const handleToolbarDoubleClick = (item) => {
+    if (item && item.type === 'weapon' && item.range && item.range > 1) {
+      // Auto-target nearest
+      const myPlayer = entitiesRef.current.players[myPlayerIdRef.current];
+      if (!myPlayer) return;
+
+      let nearestMob = null;
+      let minDist = item.range + 1;
+
+      Object.values(entitiesRef.current.mobs).forEach(mob => {
+        if (!visionRef.current.visible.has(`${Math.round(mob.renderPos.x)},${Math.round(mob.renderPos.y)}`)) return;
+
+        const dx = mob.renderPos.x - myPlayer.pos.x;
+        const dy = mob.renderPos.y - myPlayer.pos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist <= item.range && dist < minDist) {
+          minDist = dist;
+          nearestMob = mob;
+        }
+      });
+
+      if (nearestMob) {
+        const targetX = Math.round(nearestMob.renderPos.x);
+        const targetY = Math.round(nearestMob.renderPos.y);
+        socketRef.current.send(JSON.stringify({
+          type: 'RANGED_ATTACK',
+          item_id: item.id,
+          target_x: targetX,
+          target_y: targetY
+        }));
+      }
+    }
+  };
 
 
   useEffect(() => {
@@ -252,8 +367,27 @@ function App() {
                   AudioManager.play('MOVE');
                 }
               }
-            } else {
               AudioManager.play(event.type);
+            }
+            if (event.type === 'RANGED_ATTACK') {
+              // Add projectile
+              const startX = event.data.x * TILE_SIZE + TILE_SIZE / 2;
+              const startY = event.data.y * TILE_SIZE + TILE_SIZE / 2;
+              const targetX = event.data.target_x * TILE_SIZE + TILE_SIZE / 2;
+              const targetY = event.data.target_y * TILE_SIZE + TILE_SIZE / 2;
+
+              projectilesRef.current.push({
+                x: startX,
+                y: startY,
+                startX: startX,
+                startY: startY,
+                targetX: targetX,
+                targetY: targetY,
+                type: event.data.projectile || 'arrow',
+                progress: 0,
+                finished: false
+              });
+              AudioManager.play('ATTACK_BOW'); // Or distinguish based on type
             }
           });
         }
@@ -280,6 +414,17 @@ function App() {
       if (e.key === 'ArrowLeft' || e.key === 'a') direction = 'LEFT'
       if (e.key === 'ArrowRight' || e.key === 'd') direction = 'RIGHT'
 
+      // Toolbar hotkeys 1-5
+      if (['1', '2', '3', '4', '5'].includes(e.key)) {
+        const index = parseInt(e.key) - 1;
+        const item = inventory[index];
+        if (item) {
+          handleToolbarClick(item);
+        } else {
+          // Empty slot (or show inventory if user wants? Nah, just ignore or explicit)
+        }
+      }
+
       if (direction && socketRef.current?.readyState === WebSocket.OPEN) {
         socketRef.current.send(JSON.stringify({ type: 'MOVE', direction }))
       }
@@ -287,7 +432,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [])
+  }, [inventory, handleToolbarClick, socketRef, setShowInventory]) // Added dependencies
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -512,6 +657,38 @@ function App() {
       });
     };
 
+    const drawProjectiles = () => {
+      const finishedIndices = [];
+      projectilesRef.current.forEach((proj, index) => {
+        // Move projectile
+        const dx = proj.targetX - proj.startX;
+        const dy = proj.targetY - proj.startY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        proj.progress += PROJECTILE_SPEED * 15; // Speed adjustment
+
+        const ratio = dist > 0 ? Math.min(1, proj.progress / dist) : 1;
+        proj.x = proj.startX + dx * ratio;
+        proj.y = proj.startY + dy * ratio;
+
+        if (ratio >= 1) {
+          proj.finished = true;
+          finishedIndices.push(index);
+        }
+
+        // Draw
+        ctx.fillStyle = proj.type === 'magic_bolt' ? '#3498db' : '#ecf0f1';
+        ctx.beginPath();
+        ctx.arc(proj.x, proj.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Remove finished
+      for (let i = finishedIndices.length - 1; i >= 0; i--) {
+        projectilesRef.current.splice(finishedIndices[i], 1);
+      }
+    };
+
 
     const render = () => {
       if (grid.length === 0) return;
@@ -544,7 +721,9 @@ function App() {
       drawGrid();
       drawItems();
       drawMobs();
-      drawPlayers(); // Re-add the drawPlayers call
+      drawPlayers();
+      drawProjectiles();
+      drawProjectiles();
 
       ctx.restore();
 
@@ -555,24 +734,8 @@ function App() {
     return () => cancelAnimationFrame(animationFrameId);
   }, [grid, myPlayerId, assetImages]);
 
-
-  const equipItem = (itemId) => {
-    socketRef.current.send(JSON.stringify({ type: 'EQUIP_ITEM', item_id: itemId }))
-  }
-
-  const dropItem = (itemId) => {
-    socketRef.current.send(JSON.stringify({ type: 'DROP_ITEM', item_id: itemId }))
-  }
-
-  const changeDifficulty = (level) => {
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type: 'CHANGE_DIFFICULTY', difficulty: level }))
-    }
-  }
-
-  const useItem = (itemId) => {
-    socketRef.current.send(JSON.stringify({ type: 'USE_ITEM', item_id: itemId }))
-  }
+  // Calculate toolbar items (first 5 items)
+  const toolbarItems = Array.from({ length: 5 }).map((_, i) => inventory[i] || null);
 
   if (gameState === 'SELECT') {
     return <CharacterSelection onSelect={(c, d) => {
@@ -581,9 +744,6 @@ function App() {
       setGameState('PLAYING');
     }} />;
   }
-
-  // Calculate toolbar items (first 5 items)
-  const toolbarItems = Array.from({ length: 5 }).map((_, i) => inventory[i] || null);
 
   return (
     <div className="game-container">
@@ -619,7 +779,8 @@ function App() {
           ref={canvasRef}
           width={viewport.width}
           height={viewport.height}
-          className="game-canvas"
+          className={`game-canvas ${targetingMode ? 'cursor-crosshair' : ''}`}
+          onClick={handleCanvasClick}
         />
         <div
           className="player-container"
@@ -682,7 +843,12 @@ function App() {
             {toolbarItems.map((item, i) => {
               const spriteCoords = item ? getItemSpriteCoords(item.name, item.type) : null;
               return (
-                <div key={i} className="toolbar-slot" onClick={() => item ? (item.type === 'potion' ? useItem(item.id) : equipItem(item.id)) : setShowInventory(true)}>
+                <div
+                  key={i}
+                  className={`toolbar-slot ${targetingMode && equippedItems.weapon?.id === item?.id ? 'targeting-active' : ''}`}
+                  onClick={() => handleToolbarClick(item)}
+                  onDoubleClick={() => handleToolbarDoubleClick(item)}
+                >
                   {item ? (
                     <>
                       <div

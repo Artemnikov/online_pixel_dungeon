@@ -353,3 +353,19 @@
   padding: 4px;
   border-radius: 4px;
 }
+/* Targeting Mode */
+.cursor-crosshair {
+  cursor: crosshair !important;
+}
+
+.targeting-active {
+  border-color: #e74c3c !important;
+  box-shadow: 0 0 10px #e74c3c;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 5px #e74c3c; }
+  50% { box-shadow: 0 0 15px #e74c3c; }
+  100% { box-shadow: 0 0 5px #e74c3c; }
+}

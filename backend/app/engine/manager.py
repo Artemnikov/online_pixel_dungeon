@@ -326,6 +326,77 @@ class GameInstance:
                     if self.depth > 1:
                         self.add_event("STAIRS_UP", {"player": entity_id})
                         self.prev_floor()
+                        
+    def perform_ranged_attack(self, player_id: str, item_id: str, target_x: int, target_y: int) -> Optional[int]:
+        player = self.players.get(player_id)
+        if not player or player.is_downed:
+            return None
+
+        # Validate weapon
+        weapon = player.equipped_weapon
+        if not weapon or weapon.id != item_id:
+            return None
+        
+        # Check if ranged
+        if not getattr(weapon, 'projectile_type', None):
+             return None
+
+        # Check cooldown
+        current_time = time.time()
+        if (current_time - player.last_attack_time) < weapon.attack_cooldown:
+            return None
+
+        # Check range
+        dist = abs(player.pos.x - target_x) + abs(player.pos.y - target_y)
+        if dist > weapon.range:
+            return None
+
+        # Check LoS
+        if not self._is_in_los(player.pos, Position(x=target_x, y=target_y)):
+             return None
+
+        # Consume cooldown
+        player.last_attack_time = current_time
+
+        # Find target at location
+        target_entity = None
+        for p in self.players.values():
+            if p.id != player_id and p.pos.x == target_x and p.pos.y == target_y:
+                target_entity = p
+                break
+        
+        if not target_entity:
+            for m in self.mobs.values():
+                if m.is_alive and m.pos.x == target_x and m.pos.y == target_y:
+                    target_entity = m
+                    break
+        
+        # Identify projectile endpoint (if no target, it still flies to x,y)
+        self.add_event("RANGED_ATTACK", {
+            "source": player_id,
+            "x": player.pos.x,
+            "y": player.pos.y,
+            "target_x": target_x,
+            "target_y": target_y,
+            "projectile": weapon.projectile_type
+        })
+
+        if target_entity:
+            # Check Faction
+             if player.faction == target_entity.faction:
+                 return 0 # No friendly fire damage, but projectile flies
+
+             damage = player.get_total_attack() 
+             
+             actual_dmg = target_entity.take_damage(damage)
+             self.add_event("DAMAGE", {"target": target_entity.id, "amount": actual_dmg})
+             if not target_entity.is_alive:
+                 self.add_event("DEATH", {"target": target_entity.id})
+             
+             return actual_dmg
+        
+        return 0 # Missed or hit nothing
+
 
     def next_floor(self):
         if self.depth < 50:

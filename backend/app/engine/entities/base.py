@@ -57,6 +57,7 @@ class Weapon(Item):
     enchantment: Optional[str] = None
     strength_requirement: int
     attack_cooldown: float = 1.0
+    projectile_type: Optional[str] = None
 
 
 class Wearable(Item):
@@ -93,6 +94,7 @@ class Bow(Weapon):
     type: str = "weapon"
     range: int = 6 # Longer range than standard weapons
     name: str = "Bow"
+    projectile_type: str = "arrow"
 
 class Staff(Weapon):
     type: str = "weapon"
@@ -100,6 +102,7 @@ class Staff(Weapon):
     name: str = "Staff"
     magic_damage: int = 0
     charges: int = 4
+    projectile_type: str = "magic_bolt"
 
 class Mob(Entity):
     type: str = EntityType.MOB
