@@ -1,4 +1,5 @@
 import uuid
+import time
 import random
 from typing import Dict, List, Optional, Tuple
 from app.engine.dungeon.generator import DungeonGenerator, TileType
@@ -84,6 +85,7 @@ class GameInstance:
                 max_hp=10,
                 attack=2,
                 defense=0,
+                attack_cooldown=5.0, # Rat: 1 attack / 5 seconds
                 faction=Faction.DUNGEON
             )
 
@@ -102,7 +104,8 @@ class GameInstance:
                     pos=Position(x=x, y=y),
                     damage=2 + random.randint(0, 2),
                     range=1,
-                    strength_requirement=10 + random.randint(-2, 2)
+                    strength_requirement=10 + random.randint(-2, 2),
+                    attack_cooldown=3.0 if "Dagger" not in "Rusty Sword, Wooden Club" else 1.5
                 )
             elif rand < 0.3: 
                 # Bow
@@ -111,7 +114,8 @@ class GameInstance:
                     name="Old Bow",
                     pos=Position(x=x, y=y),
                     damage=2 + random.randint(0, 2),
-                    strength_requirement=10
+                    strength_requirement=10,
+                    attack_cooldown=3.5 # Bow: 1 attack / 3.5 seconds
                 )
             elif rand < 0.4:
                 # Staff
@@ -171,7 +175,7 @@ class GameInstance:
         equipped_wearable = None
         
         if class_type == CharacterClass.WARRIOR:
-            w = Weapon(id=str(uuid.uuid4()), name="Shortsword", damage=3, range=1, strength_requirement=10)
+            w = Weapon(id=str(uuid.uuid4()), name="Shortsword", damage=3, range=1, strength_requirement=10, attack_cooldown=3.0)
             inventory.append(w)
             equipped_weapon = w
             a = Wearable(id=str(uuid.uuid4()), name="Cloth Armor", strength_requirement=10, health_boost=5)
@@ -179,12 +183,12 @@ class GameInstance:
             equipped_wearable = a
             
         elif class_type == CharacterClass.MAGE:
-            w = Staff(id=str(uuid.uuid4()), name="Mage's Staff", damage=2, magic_damage=3, strength_requirement=10, charges=4)
+            w = Staff(id=str(uuid.uuid4()), name="Mage's Staff", damage=2, magic_damage=3, strength_requirement=10, charges=4, attack_cooldown=3.0)
             inventory.append(w)
             equipped_weapon = w
             
         elif class_type == CharacterClass.ROGUE:
-            w = Weapon(id=str(uuid.uuid4()), name="Dagger", damage=2, range=1, strength_requirement=9)
+            w = Weapon(id=str(uuid.uuid4()), name="Dagger", damage=2, range=1, strength_requirement=9, attack_cooldown=1.5)
             inventory.append(w)
             equipped_weapon = w
             a = Wearable(id=str(uuid.uuid4()), name="Rogue's Cloak", strength_requirement=9, health_boost=2)
@@ -192,7 +196,7 @@ class GameInstance:
             equipped_wearable = a
 
         elif class_type == CharacterClass.HUNTRESS:
-            w = Bow(id=str(uuid.uuid4()), name="Spirit Bow", damage=2, strength_requirement=10)
+            w = Bow(id=str(uuid.uuid4()), name="Spirit Bow", damage=2, strength_requirement=10, attack_cooldown=3.5)
             inventory.append(w)
             equipped_weapon = w
         
@@ -267,6 +271,17 @@ class GameInstance:
                 if entity.faction != target_entity.faction:
                     if isinstance(entity, Player) and entity.is_downed:
                         return # Downed players can't attack
+
+                    # Check cooldown
+                    current_time = time.time()
+                    cooldown = entity.attack_cooldown
+                    if isinstance(entity, Player) and entity.equipped_weapon:
+                        cooldown = entity.equipped_weapon.attack_cooldown
+                    
+                    if current_time - entity.last_attack_time < cooldown:
+                        return # Attack is on cooldown
+
+                    entity.last_attack_time = current_time
 
                     attack_power = entity.attack
                     if isinstance(entity, Player):

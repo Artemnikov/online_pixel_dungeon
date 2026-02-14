@@ -28,6 +28,9 @@ class Entity(BaseModel):
     speed: float = 1.0
     is_alive: bool = True
     faction: str
+    last_attack_time: float = 0.0
+    attack_cooldown: float = 1.0 # Default cooldown
+
 
     def move(self, dx: int, dy: int):
         self.pos.x += dx
@@ -53,6 +56,8 @@ class Weapon(Item):
     range: int
     enchantment: Optional[str] = None
     strength_requirement: int
+    attack_cooldown: float = 1.0
+
 
 class Wearable(Item):
     type: str = "wearable"
