@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 
 class EntityType:
     PLAYER = "player"
@@ -115,7 +115,7 @@ class Player(Entity):
     experience: int = 0
     level: int = 1
     strength: int = 10
-    inventory: List[Item] = []
+    inventory: List[Union[Weapon, Wearable, Potion, Item]] = []
     equipped_weapon: Optional[Weapon] = None
     equipped_wearable: Optional[Wearable] = None
     websocket_id: Optional[str] = None

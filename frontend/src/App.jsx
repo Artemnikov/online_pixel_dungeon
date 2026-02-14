@@ -131,7 +131,7 @@ function App() {
   useEffect(() => {
     if (gameState !== 'PLAYING') return;
 
-    const ws = new WebSocket(`ws://${window.location.hostname}:8000/ws/game/${gameId}?class_type=${selectedClass}`)
+    const ws = new WebSocket(`ws://${window.location.hostname}:8000/ws/game/${gameId}?class_type=${selectedClass}&difficulty=${difficulty}`)
     socketRef.current = ws
 
     ws.onopen = () => setMessages(prev => [...prev, "Connected to server"])
@@ -575,11 +575,15 @@ function App() {
   }
 
   if (gameState === 'SELECT') {
-    return <CharacterSelection onSelect={(c) => {
+    return <CharacterSelection onSelect={(c, d) => {
       setSelectedClass(c);
+      setDifficulty(d);
       setGameState('PLAYING');
     }} />;
   }
+
+  // Calculate toolbar items (first 5 items)
+  const toolbarItems = Array.from({ length: 5 }).map((_, i) => inventory[i] || null);
 
   return (
     <div className="game-container">
@@ -590,9 +594,25 @@ function App() {
         </div>
       )}
 
-      <button className="inventory-toggle-btn" onClick={() => setShowInventory(true)}>
-        🎒
-      </button>
+      {/* Top Left HUD: Health & Player Info */}
+      <div className="top-left-hud">
+        <div className="player-status-card">
+          <div className="player-portrait">
+            {/* Simple placeholder or could be class sprite */}
+            <div className="portrait-inner">👤</div>
+          </div>
+          <div className="player-details">
+            <div className="player-name">{myStats.name}</div>
+            <div className="health-bar-container-large">
+              <div
+                className={`health-bar-fill-large ${myStats.isDowned ? 'downed' : myStats.isRegen ? 'regen' : ''}`}
+                style={{ width: `${(myStats.hp / myStats.maxHp) * 100}%` }}
+              ></div>
+              <div className="health-text-large">{Math.ceil(myStats.hp)} / {myStats.maxHp} HP</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="canvas-wrapper">
         <canvas
@@ -631,7 +651,9 @@ function App() {
                   <div className="item-name">{item.name}</div>
                   <div className="item-type">{item.type}</div>
                   <div className="item-stats">
-                    {item.type === 'weapon' ? `Dmg: ${item.damage}` : `HP+: ${item.health_boost}`}
+                    {item.type === 'weapon' ? `Dmg: ${item.damage}` : (item.health_boost ? `HP+: ${item.health_boost}` : '')}
+                    {item.type === 'potion' && item.effect === 'regen' && 'Regen 50% HP'}
+                    {item.type === 'potion' && item.effect === 'revive' && 'Revives DBNO Ally'}
                   </div>
                   <div className="item-actions">
                     {item.type === 'potion' && (
@@ -652,44 +674,41 @@ function App() {
         </div>
       )}
 
-      <div className="game-hud">
-        <div className="bottom-left-hud">
-          <div className="health-bar-container">
-            <div
-              className={`health-bar-fill ${myStats.isDowned ? 'downed' : myStats.isRegen ? 'regen' : ''}`}
-              style={{ width: `${(myStats.hp / myStats.maxHp) * 100}%` }}
-            ></div>
-            <div className="health-text">{Math.ceil(myStats.hp)} / {myStats.maxHp} HP</div>
-          </div>
-          <div className="player-info">{myStats.name}</div>
-        </div>
+      {/* Bottom HUD: Toolbar & Status */}
+      <div className="game-hud-bottom">
 
-        <div className="bottom-center-hud">
-          <div className="equipped-items">
-            <div className="equipped-slot">
-              <span className="label">Weapon:</span>
-              <span className="value">{equippedItems.weapon?.name || "None"}</span>
-            </div>
-            <div className="equipped-slot">
-              <span className="label">Armor:</span>
-              <span className="value">{equippedItems.wearable?.name || "None"}</span>
-            </div>
+        <div className="toolbar-container">
+          <div className="toolbar">
+            {toolbarItems.map((item, i) => {
+              const spriteCoords = item ? getItemSpriteCoords(item.name, item.type) : null;
+              return (
+                <div key={i} className="toolbar-slot" onClick={() => item ? (item.type === 'potion' ? useItem(item.id) : equipItem(item.id)) : setShowInventory(true)}>
+                  {item ? (
+                    <>
+                      <div
+                        className="toolbar-item-sprite"
+                      >
+                        <div style={{
+                          width: '16px',
+                          height: '16px',
+                          backgroundImage: `url(${itemsSprite})`,
+                          backgroundPosition: `-${spriteCoords[0] * 16}px -${spriteCoords[1] * 16}px`,
+                          transform: 'scale(2)',
+                          transformOrigin: 'top left',
+                          imageRendering: 'pixelated'
+                        }}></div>
+                      </div>
+                      <div className="toolbar-item-name">{item.name.substring(0, 8)}..</div>
+                    </>
+                  ) : <span className="slot-number">{i + 1}</span>}
+                </div>
+              );
+            })}
           </div>
-        </div>
 
-        <div className="bottom-right-hud">
-          <div className="difficulty-selector">
-            <span className="label">Difficulty:</span>
-            <select
-              value={difficulty}
-              onChange={(e) => changeDifficulty(e.target.value)}
-              className="difficulty-select"
-            >
-              <option value="easy">Easy</option>
-              <option value="normal">Normal</option>
-              <option value="hard">Hard</option>
-            </select>
-          </div>
+          <button className="inventory-toggle-btn-bottom" onClick={() => setShowInventory(true)}>
+            🎒
+          </button>
         </div>
 
         <div className="connection-log">

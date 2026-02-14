@@ -6,6 +6,7 @@ import huntressArt from './assets/pixel-dungeon/art/huntress.png';
 
 const CharacterSelection = ({ onSelect }) => {
   const [selectedClass, setSelectedClass] = useState('warrior');
+  const [difficulty, setDifficulty] = useState('normal');
 
   const classes = [
     { id: 'warrior', name: 'Warrior', art: warriorArt, desc: 'Starts with a Shortsword and Cloth Armor.' },
@@ -17,6 +18,22 @@ const CharacterSelection = ({ onSelect }) => {
   return (
     <div className="character-selection-screen">
       <h1>Select Your Hero</h1>
+
+      <div className="difficulty-container">
+        <label>Difficulty: </label>
+        <div className="difficulty-options">
+          {['easy', 'normal', 'hard'].map(d => (
+            <button
+              key={d}
+              className={`diff-btn ${difficulty === d ? 'active' : ''}`}
+              onClick={() => setDifficulty(d)}
+            >
+              {d.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="classes-container">
         {classes.map((c) => (
           <div
@@ -32,7 +49,7 @@ const CharacterSelection = ({ onSelect }) => {
           </div>
         ))}
       </div>
-      <button className="start-btn" onClick={() => onSelect(selectedClass)}>
+      <button className="start-btn" onClick={() => onSelect(selectedClass, difficulty)}>
         Enter Dungeon
       </button>
 
@@ -47,10 +64,38 @@ const CharacterSelection = ({ onSelect }) => {
           color: white;
           font-family: monospace;
         }
+        .difficulty-container {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          margin-bottom: 20px;
+          background: #222;
+          padding: 10px 20px;
+          border-radius: 8px;
+          border: 1px solid #444;
+        }
+        .difficulty-options {
+          display: flex;
+          gap: 10px;
+        }
+        .diff-btn {
+          background: #333;
+          border: 1px solid #555;
+          color: #888;
+          padding: 5px 15px;
+          cursor: pointer;
+          border-radius: 4px;
+          font-family: monospace;
+        }
+        .diff-btn.active {
+          background: #e67e22;
+          color: white;
+          border-color: #d35400;
+        }
         .classes-container {
           display: flex;
           gap: 20px;
-          margin: 40px 0;
+          margin: 20px 0 40px 0;
         }
         .class-card {
           border: 2px solid #444;
