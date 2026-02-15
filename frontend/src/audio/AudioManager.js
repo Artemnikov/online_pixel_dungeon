@@ -2,6 +2,10 @@ import atkBowSound from '../assets/pixel-dungeon/audio/atk_bow.mp3';
 import zapSound from '../assets/pixel-dungeon/audio/zap.mp3';
 import hitMagicSound from '../assets/pixel-dungeon/audio/hit_magic.mp3';
 import stepSound from '../assets/pixel-dungeon/audio/step.mp3';
+import hitArrowSound from '../assets/pixel-dungeon/audio/hit_arrow.mp3';
+import hitSlashSound from '../assets/pixel-dungeon/audio/hit_slash.mp3';
+import hitBodySound from '../assets/pixel-dungeon/audio/hit.mp3';
+import healthWarnSound from '../assets/pixel-dungeon/audio/health_warn.mp3';
 
 class AudioManager {
     constructor() {
@@ -14,6 +18,10 @@ class AudioManager {
         this.loadSound('ATTACK_MAGIC', zapSound);
         this.loadSound('HIT_MAGIC', hitMagicSound);
         this.loadSound('STEP', stepSound);
+        this.loadSound('HIT_ARROW', hitArrowSound);
+        this.loadSound('HIT_SLASH', hitSlashSound);
+        this.loadSound('HIT_BODY', hitBodySound);
+        this.loadSound('HEALTH_WARN', healthWarnSound);
     }
 
     async loadSound(name, src) {

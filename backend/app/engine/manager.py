@@ -301,6 +301,20 @@ class GameInstance:
                     self.add_event("ATTACK", {"source": entity.id, "target": target_entity.id, "damage": dmg})
                     if dmg > 0:
                         self.add_event("DAMAGE", {"target": target_entity.id, "amount": dmg})
+                        
+                        # Sound Effects for Melee
+                        if isinstance(entity, Player):
+                            # Player hitting Monster
+                            # Default to slash for melee weapons
+                             self.add_event("PLAY_SOUND", {"sound": "HIT_SLASH"})
+                        
+                        if isinstance(target_entity, Player):
+                            # Player getting hit
+                            self.add_event("PLAY_SOUND", {"sound": "HIT_BODY"})
+                            # Low health warning
+                            if target_entity.hp / target_entity.get_total_max_hp() <= 0.3:
+                                 self.add_event("PLAY_SOUND", {"sound": "HEALTH_WARN"})
+
                         if not target_entity.is_alive:
                             self.add_event("DEATH", {"target": target_entity.id})
                 return
@@ -432,6 +446,19 @@ class GameInstance:
 
                  damage_dealt = target_entity.take_damage(attack_power)
                  self.add_event("DAMAGE", {"target": target_entity.id, "amount": damage_dealt})
+                 
+                 # Sound Effects for Ranged Hit
+                 if damage_dealt > 0:
+                     if projectile_type == 'magic_bolt':
+                         self.add_event("PLAY_SOUND", {"sound": "HIT_MAGIC"})
+                     else:
+                         self.add_event("PLAY_SOUND", {"sound": "HIT_ARROW"})
+
+                     if isinstance(target_entity, Player):
+                            self.add_event("PLAY_SOUND", {"sound": "HIT_BODY"})
+                            if target_entity.hp / target_entity.get_total_max_hp() <= 0.3:
+                                 self.add_event("PLAY_SOUND", {"sound": "HEALTH_WARN"})
+
                  if not target_entity.is_alive:
                      self.add_event("DEATH", {"target": target_entity.id})
         

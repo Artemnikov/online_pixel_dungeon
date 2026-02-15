@@ -377,6 +377,9 @@ function App() {
 
         if (data.events) {
           data.events.forEach(event => {
+            if (event.type === 'PLAY_SOUND') {
+              AudioManager.play(event.data.sound);
+            }
             if (event.type === 'MOVE') {
               // console.log('[App] MOVE event:', event.data, 'MyID:', myPlayerIdRef.current);
               if (event.data.entity === myPlayerIdRef.current) {
@@ -386,7 +389,7 @@ function App() {
 
                 if (gridRef.current[tileY] && gridRef.current[tileY][tileX]) {
                   const tileType = gridRef.current[tileY][tileX];
-                  console.log('[App] Calling playStep with tileType:', tileType);
+                  // console.log('[App] Calling playStep with tileType:', tileType);
                   AudioManager.playStep(tileType);
                 } else {
                   console.warn('[App] Grid lookup failed for audio:', tileX, tileY);
@@ -422,7 +425,12 @@ function App() {
                 progress: 0,
                 finished: false
               });
-              AudioManager.play('ATTACK_BOW'); // Or distinguish based on type
+
+              if (event.data.projectile === 'magic_bolt') {
+                AudioManager.play('ATTACK_MAGIC');
+              } else {
+                AudioManager.play('ATTACK_BOW');
+              }
             }
           });
         }
