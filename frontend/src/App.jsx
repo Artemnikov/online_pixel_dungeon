@@ -164,14 +164,17 @@ function App() {
     const tileY = Math.floor(worldY / TILE_SIZE);
 
     // Fire!
-    if (equippedItems.weapon) {
+    // Use optimistic item ID if set (string), otherwise currently equipped
+    const weaponId = typeof targetingMode === 'string' ? targetingMode : equippedItems.weapon?.id;
+
+    if (weaponId) {
       socketRef.current.send(JSON.stringify({
         type: 'RANGED_ATTACK',
-        item_id: equippedItems.weapon.id,
+        item_id: weaponId,
         target_x: tileX,
         target_y: tileY
       }));
-      setTargetingMode(true); // Keep targeting on
+      setTargetingMode(true); // Keep targeting on (reverting to boolean)
     }
   };
 
@@ -189,12 +192,12 @@ function App() {
 
         if (!isEquipped) {
           equipItem(item.id);
-          // We can't immediately toggle targeting because state hasn't updated yet.
-          // But maybe we can optimistically set it if we trust the user intent?
-          // No, let's stick to: Click 1 = Equip. Click 2 = Target.
-          // However, user expected "Click 1" to work. 
-          // If we equip, we disable targeting mode of previous weapon.
-          setTargetingMode(false);
+          // If ranged, optimistically enter targeting mode using the item's ID
+          if (item.range && item.range > 1) {
+            setTargetingMode(item.id);
+          } else {
+            setTargetingMode(false);
+          }
         } else {
           // Already equipped. Toggle targeting if ranged.
           if (item.range && item.range > 1) {
