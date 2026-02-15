@@ -42,7 +42,12 @@ const ITEM_SPRITES = {
   "Potion": [12, 14],
 
   // Default
-  "default": [8, 13]
+  "default": [8, 13],
+
+  // Throwables (Approximated)
+  "Stone": [10, 10],
+  "Boomerang": [11, 10],
+  "Throwable Dagger": [12, 13] // Same as Dagger
 };
 
 // Helper to get sprite coords
@@ -55,6 +60,8 @@ const getItemSpriteCoords = (itemName, itemType) => {
   if (itemType === 'potion') return [12, 14];
   if (itemType === 'weapon') return [14, 14];
   if (itemType === 'wearable') return [14, 12];
+
+  if (itemType === 'throwable') return [11, 10]; // Fallback for throwables
   return ITEM_SPRITES["default"];
 }
 
@@ -76,7 +83,9 @@ function App() {
   const [inventory, setInventory] = useState([])
   const [equippedItems, setEquippedItems] = useState({ weapon: null, wearable: null })
   const [targetingMode, setTargetingMode] = useState(false)
+
   const projectilesRef = useRef([])
+  const lastKeyRef = useRef({ key: null, time: 0 }) // For double-tap detection
 
   const [gameState, setGameState] = useState('SELECT'); // 'SELECT', 'PLAYING'
   const [selectedClass, setSelectedClass] = useState('warrior');
@@ -206,12 +215,22 @@ function App() {
         }
       } else if (item.type === 'wearable') {
         equipItem(item.id);
+      } else if (item.type === 'throwable') {
+        // Throwable items: toggle targeting mode specifically for this item
+        if (targetingMode === item.id) {
+          setTargetingMode(false);
+        } else {
+          setTargetingMode(item.id);
+        }
       }
     }
   };
 
   const handleToolbarDoubleClick = (item) => {
-    if (item && item.type === 'weapon' && item.range && item.range > 1) {
+    const isRangedWeapon = item && item.type === 'weapon' && item.range && item.range > 1;
+    const isThrowable = item && item.type === 'throwable';
+
+    if (isRangedWeapon || isThrowable) {
       // Auto-target nearest
       const myPlayer = entitiesRef.current.players[myPlayerIdRef.current];
       if (!myPlayer) return;
@@ -222,8 +241,10 @@ function App() {
       Object.values(entitiesRef.current.mobs).forEach(mob => {
         if (!visionRef.current.visible.has(`${Math.round(mob.renderPos.x)},${Math.round(mob.renderPos.y)}`)) return;
 
-        const dx = mob.renderPos.x - myPlayer.pos.x;
-        const dy = mob.renderPos.y - myPlayer.pos.y;
+        // Use renderPos for both player and mob to get accurate visual distance
+        // myPlayer.pos is not constantly updated in the ref (only initial), so it becomes stale.
+        const dx = mob.renderPos.x - myPlayer.renderPos.x;
+        const dy = mob.renderPos.y - myPlayer.renderPos.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist <= item.range && dist < minDist) {
@@ -422,9 +443,16 @@ function App() {
         const index = parseInt(e.key) - 1;
         const item = inventory[index];
         if (item) {
-          handleToolbarClick(item);
-        } else {
-          // Empty slot (or show inventory if user wants? Nah, just ignore or explicit)
+          const now = Date.now();
+          const isDoubleTap = lastKeyRef.current.key === e.key && (now - lastKeyRef.current.time) < 300;
+
+          if (isDoubleTap) {
+            handleToolbarDoubleClick(item);
+            lastKeyRef.current = { key: null, time: 0 }; // Reset
+          } else {
+            handleToolbarClick(item);
+            lastKeyRef.current = { key: e.key, time: now };
+          }
         }
       }
 
@@ -435,7 +463,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [inventory, handleToolbarClick, socketRef, setShowInventory]) // Added dependencies
+  }, [inventory, handleToolbarClick, handleToolbarDoubleClick, socketRef, setShowInventory]) // Added dependencies
 
   useEffect(() => {
     const canvas = canvasRef.current;

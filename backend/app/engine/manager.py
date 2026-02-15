@@ -3,7 +3,7 @@ import time
 import random
 from typing import Dict, List, Optional, Tuple
 from app.engine.dungeon.generator import DungeonGenerator, TileType
-from app.engine.entities.base import Player, Mob, Position, EntityType, Mob as MobEntity, Item, Weapon, Wearable, Faction, Difficulty, HealthPotion, RevivingPotion, CharacterClass, Bow, Staff
+from app.engine.entities.base import Player, Mob, Position, EntityType, Mob as MobEntity, Item, Weapon, Wearable, Faction, Difficulty, HealthPotion, RevivingPotion, CharacterClass, Bow, Staff, Throwable, Stone, Boomerang, ThrowableDagger
 
 class GameInstance:
     def __init__(self, game_id: str):
@@ -136,7 +136,16 @@ class GameInstance:
                     strength_requirement=10 + random.randint(-2, 2),
                     health_boost=5 + random.randint(0, 5)
                 )
-            elif rand < 0.85:
+            elif rand < 0.8:
+                # Throwables
+                t_rand = random.random()
+                if t_rand < 0.5:
+                    self.items[item_id] = Stone(id=item_id, pos=Position(x=x, y=y), damage=1, range=5)
+                elif t_rand < 0.8:
+                    self.items[item_id] = ThrowableDagger(id=item_id, pos=Position(x=x, y=y), damage=4, range=4)
+                else:
+                    self.items[item_id] = Boomerang(id=item_id, pos=Position(x=x, y=y), damage=3, range=6)
+            elif rand < 0.9:
                 # Health Potion
                 self.items[item_id] = HealthPotion(
                     id=item_id,
@@ -332,23 +341,40 @@ class GameInstance:
         if not player or player.is_downed:
             return None
 
-        # Validate weapon
-        weapon = player.equipped_weapon
-        if not weapon or weapon.id != item_id:
+        # Find item: could be equipped weapon OR a throwable in inventory
+        item = None
+        if player.equipped_weapon and player.equipped_weapon.id == item_id:
+            item = player.equipped_weapon
+        else:
+            item = next((i for i in player.inventory if i.id == item_id), None)
+
+        if not item:
             return None
+
+        # Determine properties
+        is_throwable = isinstance(item, Throwable)
+        is_weapon = isinstance(item, Weapon)
         
-        # Check if ranged
-        if not getattr(weapon, 'projectile_type', None):
+        if not (is_throwable or (is_weapon and getattr(item, 'projectile_type', None))):
              return None
 
-        # Check cooldown
+        # Check cooldown (Global attack cooldown for now, or per-item?)
+        # Base entity has last_attack_time.
         current_time = time.time()
-        if (current_time - player.last_attack_time) < weapon.attack_cooldown:
+        cooldown = 1.0
+        if is_weapon:
+            cooldown = item.attack_cooldown
+        # Throwables might not have explicit cooldown in class def yet, using default 1.0 or fast?
+        # Let's say throwables are fast or standard. Base Entity has 1.0. 
+        # For throwables, let's use a standard 1.0s for now or 0.5s.
+        
+        if (current_time - player.last_attack_time) < cooldown:
             return None
 
         # Check range
         dist = abs(player.pos.x - target_x) + abs(player.pos.y - target_y)
-        if dist > weapon.range:
+        max_range = item.range if hasattr(item, 'range') else 1
+        if dist > max_range:
             return None
 
         # Check LoS
@@ -357,6 +383,9 @@ class GameInstance:
 
         # Consume cooldown
         player.last_attack_time = current_time
+
+        # Logic for projectile
+        projectile_type = getattr(item, 'projectile_type', 'arrow')
 
         # Find target at location
         target_entity = None
@@ -378,24 +407,43 @@ class GameInstance:
             "y": player.pos.y,
             "target_x": target_x,
             "target_y": target_y,
-            "projectile": weapon.projectile_type
+            "projectile": projectile_type
         })
 
+        damage_dealt = 0
         if target_entity:
             # Check Faction
              if player.faction == target_entity.faction:
-                 return 0 # No friendly fire damage, but projectile flies
+                 pass # Friendly fire ignored
+             else:
+                 attack_power = 0
+                 if is_weapon:
+                     attack_power = player.get_total_attack() # Includes strength + weapon damage? 
+                     # Wait, get_total_attack uses equipped_weapon. 
+                     # If we are throwing a rock, we shouldn't use equipped sword's damage.
+                     # We should use item damage + maybe strength bonus?
+                     if item == player.equipped_weapon:
+                         attack_power = player.get_total_attack()
+                     else:
+                         # It's a throwable from inventory
+                         attack_power = item.damage + (player.strength // 2) # Simple strength scaling
+                 elif is_throwable:
+                     attack_power = item.damage + (player.strength // 2)
 
-             damage = player.get_total_attack() 
-             
-             actual_dmg = target_entity.take_damage(damage)
-             self.add_event("DAMAGE", {"target": target_entity.id, "amount": actual_dmg})
-             if not target_entity.is_alive:
-                 self.add_event("DEATH", {"target": target_entity.id})
-             
-             return actual_dmg
+                 damage_dealt = target_entity.take_damage(attack_power)
+                 self.add_event("DAMAGE", {"target": target_entity.id, "amount": damage_dealt})
+                 if not target_entity.is_alive:
+                     self.add_event("DEATH", {"target": target_entity.id})
         
-        return 0 # Missed or hit nothing
+        # Handle Consumption
+        if is_throwable and item.consumable:
+            if item in player.inventory:
+                player.inventory.remove(item)
+                # If it was equipped (unlikely for throwable in this logic but possible if we allowed equipping):
+                if player.equipped_weapon == item:
+                    player.equipped_weapon = None
+
+        return damage_dealt
 
 
     def next_floor(self):

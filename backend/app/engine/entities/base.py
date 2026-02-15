@@ -104,6 +104,38 @@ class Staff(Weapon):
     charges: int = 4
     projectile_type: str = "magic_bolt"
 
+class Throwable(Item):
+    type: str = "weapon" # Treat as weapon for now so it fits in inventory/usage logic, or keep as item? 
+    # Actually, if it's "weapon" type, frontend might try to equip it.
+    # Let's use a specific type or handle it. Plan said "Item" or "Weapon" base.
+    # Let's use "throwable" type to distinguish easily in frontend.
+    type: str = "throwable"
+    damage: int
+    range: int
+    consumable: bool = True
+    projectile_type: str = "users_projectile" # default
+
+class Stone(Throwable):
+    name: str = "Stone"
+    damage: int = 1
+    range: int = 5
+    consumable: bool = True
+    projectile_type: str = "stone"
+
+class Boomerang(Throwable):
+    name: str = "Boomerang"
+    damage: int = 3
+    range: int = 6
+    consumable: bool = False
+    projectile_type: str = "boomerang"
+
+class ThrowableDagger(Throwable):
+    name: str = "Throwable Dagger"
+    damage: int = 4
+    range: int = 4
+    consumable: bool = True
+    projectile_type: str = "dagger"
+
 class Mob(Entity):
     type: str = EntityType.MOB
     faction: str = Faction.DUNGEON
