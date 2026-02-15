@@ -68,6 +68,7 @@ const getItemSpriteCoords = (itemName, itemType) => {
 function App() {
   const canvasRef = useRef(null)
   const [grid, setGrid] = useState([])
+  const gridRef = useRef([]);
   const socketRef = useRef(null)
 
   // Using refs for mutable state that doesn't trigger re-renders
@@ -280,6 +281,7 @@ function App() {
       const data = JSON.parse(event.data)
       if (data.type === 'INIT') {
         setGrid(data.grid)
+        gridRef.current = data.grid;
         visionRef.current.discovered = new Set()
         setDimensions({ width: data.width * TILE_SIZE, height: data.height * TILE_SIZE })
         if (data.player_id) {
@@ -376,22 +378,31 @@ function App() {
         if (data.events) {
           data.events.forEach(event => {
             if (event.type === 'MOVE') {
+              // console.log('[App] MOVE event:', event.data, 'MyID:', myPlayerIdRef.current);
               if (event.data.entity === myPlayerIdRef.current) {
                 // Check tile type for audio
                 const tileX = event.data.x;
                 const tileY = event.data.y;
-                // We need to look up the tile type in the grid.
-                // However, grid state might not be instantly updated if we just got a move event?
-                // Actually, the grid is static unless discovered. But the tile type is fixed in backend.
-                // We can use the local grid state.
-                if (grid[tileY] && grid[tileY][tileX]) {
-                  const tileType = grid[tileY][tileX];
+
+                if (gridRef.current[tileY] && gridRef.current[tileY][tileX]) {
+                  const tileType = gridRef.current[tileY][tileX];
+                  console.log('[App] Calling playStep with tileType:', tileType);
                   AudioManager.playStep(tileType);
                 } else {
+                  console.warn('[App] Grid lookup failed for audio:', tileX, tileY);
                   AudioManager.play('MOVE');
                 }
+              } else {
+                // Only play MOVE for others if we want to hear them? 
+                // Original code played MOVE for everyone at line 394 unconditionally.
+                // But wait, line 394 is OUTSIDE the player check.
               }
-              AudioManager.play(event.type);
+
+              // Original logic played MOVE for everyone including self.
+              // IF we want to replace the sound for self, we should probably NOT play 'MOVE' again if we played 'playStep'.
+              if (event.data.entity !== myPlayerIdRef.current) {
+                AudioManager.play(event.type);
+              }
             }
             if (event.type === 'RANGED_ATTACK') {
               // Add projectile

@@ -1,6 +1,7 @@
 import atkBowSound from '../assets/pixel-dungeon/audio/atk_bow.mp3';
 import zapSound from '../assets/pixel-dungeon/audio/zap.mp3';
 import hitMagicSound from '../assets/pixel-dungeon/audio/hit_magic.mp3';
+import stepSound from '../assets/pixel-dungeon/audio/step.mp3';
 
 class AudioManager {
     constructor() {
@@ -12,16 +13,22 @@ class AudioManager {
         this.loadSound('ATTACK_BOW', atkBowSound);
         this.loadSound('ATTACK_MAGIC', zapSound);
         this.loadSound('HIT_MAGIC', hitMagicSound);
+        this.loadSound('STEP', stepSound);
     }
 
     async loadSound(name, src) {
         try {
+            console.log(`[Audio] Attempting to load sound: ${name} from ${src}`);
             const response = await fetch(src);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             const arrayBuffer = await response.arrayBuffer();
             const audioBuffer = await this.audioCtx.decodeAudioData(arrayBuffer);
             this.loadedSounds[name] = audioBuffer;
+            console.log(`[Audio] Successfully loaded sound: ${name}`);
         } catch (e) {
-            console.error(`Failed to load sound ${name}:`, e);
+            console.error(`[Audio] Failed to load sound ${name}:`, e);
         }
     }
 
@@ -82,23 +89,18 @@ class AudioManager {
     playStep(tileType) {
         if (!this.enabled) return;
 
-        // tileType: 2 = FLOOR (Generic), 6 = WOOD, 7 = WATER, 8 = COBBLE
-        // Using synthesis for now
-
         // Randomize pitch slightly for realism
-        const detune = (Math.random() - 0.5) * 50;
+        // We will change playback rate slightly to affect pitch
+        // rate: 0.9 to 1.1
+        const rate = 0.9 + Math.random() * 0.2;
 
-        if (tileType === 7) { // WATER
-            // Splashy sound
-            this.playNoise(0.1, 0.2, 'lowpass', 400);
-        } else if (tileType === 6) { // WOOD
-            // Hollow woody tap
-            this.playTone(300 + detune, 'square', 0.05, 0.1);
-        } else if (tileType === 8) { // COBBLE
-            // Hard click
-            this.playTone(400 + detune, 'triangle', 0.05, 0.15);
-        } else { // Generic Floor
-            this.playTone(200 + detune, 'sine', 0.05, 0.1);
+        if (this.loadedSounds['STEP']) {
+            console.log('[Audio] Playing STEP sound');
+            this.playSoundBuffer(this.loadedSounds['STEP'], rate);
+        } else {
+            console.warn('[Audio] STEP sound not loaded yet, using fallback');
+            // Fallback if sound not loaded yet
+            this.playTone(200, 'sine', 0.05, 0.1);
         }
     }
 
@@ -132,9 +134,10 @@ class AudioManager {
         noise.start();
     }
 
-    playSoundBuffer(buffer) {
+    playSoundBuffer(buffer, rate = 1.0) {
         const source = this.audioCtx.createBufferSource();
         source.buffer = buffer;
+        source.playbackRate.value = rate;
         source.connect(this.audioCtx.destination);
         source.start(0);
     }
