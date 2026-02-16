@@ -26,9 +26,11 @@ class Entity(BaseModel):
     attack: int
     defense: int
     speed: float = 1.0
+    evasion: float = 0.0 # Chance to avoid attack (0.0 to 1.0)
     is_alive: bool = True
     faction: str
     last_attack_time: float = 0.0
+    last_move_time: float = 0.0
     attack_cooldown: float = 1.0 # Default cooldown
 
 

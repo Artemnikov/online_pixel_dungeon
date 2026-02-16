@@ -5,6 +5,15 @@ from typing import Dict, List, Optional, Tuple
 from app.engine.dungeon.generator import DungeonGenerator, TileType
 from app.engine.entities.base import Player, Mob, Position, EntityType, Mob as MobEntity, Item, Weapon, Wearable, Faction, Difficulty, HealthPotion, RevivingPotion, CharacterClass, Bow, Staff, Throwable, Stone, Boomerang, ThrowableDagger
 
+MONSTER_TABLE = {
+    "Marsupial Rat": {"hp": 8, "attack": 2, "defense": 0, "evasion": 0.05, "speed": 1.0, "attack_cooldown": 5.0, "min_floor": 1, "max_floor": 4, "weight": 10},
+    "Sewer Snake": {"hp": 5, "attack": 2, "defense": 0, "evasion": 0.50, "speed": 1.0, "attack_cooldown": 4.0, "min_floor": 1, "max_floor": 4, "weight": 8},
+    "Gnoll Scout": {"hp": 15, "attack": 3, "defense": 1, "evasion": 0.10, "speed": 1.0, "attack_cooldown": 4.0, "min_floor": 2, "max_floor": 4, "weight": 7},
+    "Sewer Crab": {"hp": 12, "attack": 4, "defense": 2, "evasion": 0.10, "speed": 2.2, "attack_cooldown": 3.0, "min_floor": 3, "max_floor": 4, "weight": 5},
+    "Albino Rat": {"hp": 20, "attack": 4, "defense": 1, "evasion": 0.20, "speed": 1.2, "attack_cooldown": 4.0, "min_floor": 2, "max_floor": 4, "weight": 1},
+    "Fetid Rat": {"hp": 25, "attack": 5, "defense": 2, "evasion": 0.00, "speed": 0.8, "attack_cooldown": 6.0, "min_floor": 2, "max_floor": 4, "weight": 1},
+}
+
 class GameInstance:
     def __init__(self, game_id: str):
         self.game_id = game_id
@@ -71,23 +80,36 @@ class GameInstance:
         
         if self.depth % 5 == 0:
             self._spawn_boss(unsafe_floor_tiles)
-        
-        num_mobs = 5 + (self.depth * 2)
-        for _ in range(num_mobs):
-            if not unsafe_floor_tiles: break
-            x, y = unsafe_floor_tiles.pop(random.randint(0, len(unsafe_floor_tiles) - 1))
-            mob_id = str(uuid.uuid4())
-            self.mobs[mob_id] = MobEntity(
-                id=mob_id,
-                name=f"Rat",
-                pos=Position(x=x, y=y),
-                hp=10,
-                max_hp=10,
-                attack=2,
-                defense=0,
-                attack_cooldown=5.0, # Rat: 1 attack / 5 seconds
-                faction=Faction.DUNGEON
-            )
+        else:
+            available_monsters = [
+                name for name, stats in MONSTER_TABLE.items()
+                if stats["min_floor"] <= self.depth <= stats["max_floor"]
+            ]
+            
+            if available_monsters:
+                weights = [MONSTER_TABLE[name]["weight"] for name in available_monsters]
+                num_mobs = 5 + (self.depth * 2)
+                for _ in range(num_mobs):
+                    if not unsafe_floor_tiles: break
+                    x, y = unsafe_floor_tiles.pop(random.randint(0, len(unsafe_floor_tiles) - 1))
+                    
+                    monster_name = random.choices(available_monsters, weights=weights)[0]
+                    stats = MONSTER_TABLE[monster_name]
+                    
+                    mob_id = str(uuid.uuid4())
+                    self.mobs[mob_id] = MobEntity(
+                        id=mob_id,
+                        name=monster_name,
+                        pos=Position(x=x, y=y),
+                        hp=stats["hp"],
+                        max_hp=stats["hp"],
+                        attack=stats["attack"],
+                        defense=stats["defense"],
+                        evasion=stats["evasion"],
+                        speed=stats["speed"],
+                        attack_cooldown=stats["attack_cooldown"],
+                        faction=Faction.DUNGEON
+                    )
 
         num_items = 4 + random.randint(0, 3)
         for _ in range(num_items):
@@ -162,15 +184,30 @@ class GameInstance:
         if not floor_tiles: return
         x, y = floor_tiles.pop(random.randint(0, len(floor_tiles) - 1))
         boss_id = str(uuid.uuid4())
+        
+        name = f"Floor {self.depth} Boss"
+        hp = 100 + (self.depth * 20)
+        attack = 10 + self.depth
+        defense = 5 + self.depth
+        evasion = 0.05
+        
+        if self.depth == 5:
+            name = "Goo"
+            hp = 150
+            attack = 12
+            defense = 8
+            evasion = 0.1
+
         self.mobs[boss_id] = MobEntity(
             id=boss_id,
             type=EntityType.BOSS,
-            name=f"Floor {self.depth} Boss",
+            name=name,
             pos=Position(x=x, y=y),
-            hp=100 + (self.depth * 20),
-            max_hp=100 + (self.depth * 20),
-            attack=10 + self.depth,
-            defense=5 + self.depth,
+            hp=hp,
+            max_hp=hp,
+            attack=attack,
+            defense=defense,
+            evasion=evasion,
             faction=Faction.DUNGEON
         )
 
@@ -296,6 +333,10 @@ class GameInstance:
                     if isinstance(entity, Player):
                         attack_power = entity.get_total_attack()
                     
+                    # Evasion Check
+                    if random.random() < target_entity.evasion:
+                        self.add_event("MISS", {"source": entity.id, "target": target_entity.id})
+                        return # Missed!
                     
                     dmg = target_entity.take_damage(attack_power)
                     self.add_event("ATTACK", {"source": entity.id, "target": target_entity.id, "damage": dmg})
@@ -509,6 +550,25 @@ class GameInstance:
             target_player = self._find_nearest_player(mob.pos)
             dist = self._get_distance(mob.pos, target_player.pos) if target_player else float('inf')
             
+            # Use speed for movement frequency
+            current_time = time.time()
+            base_cooldown = 1.0 # Base action once a second
+            if self.difficulty == Difficulty.HARD: base_cooldown = 0.8
+            elif self.difficulty == Difficulty.EASY: base_cooldown = 1.5
+
+            action_cooldown = base_cooldown / mob.speed
+            
+            if current_time - mob.last_move_time < action_cooldown:
+                # Still allow attack if adjacent! 
+                # PD usually takes a turn for both, but for real-time we want them to feel distinct.
+                # If they are already in range, they use attack_cooldown which is separate.
+                if dist > 1:
+                    continue
+            
+            # Only update move time if they actually MOVE or attempt to.
+            # But if they are attacking, we should still respect action cooldown?
+            # Let's say speed affects how often they "step". 
+            
             # Difficulty-specific behavior
             moved = False
             
@@ -517,10 +577,12 @@ class GameInstance:
                 if target_player and dist <= 1:
                     dx, dy = target_player.pos.x - mob.pos.x, target_player.pos.y - mob.pos.y
                     self.move_entity(mob.id, dx, dy)
+                    mob.last_move_time = current_time
                     moved = True
-                elif random.random() < 0.05:
+                elif random.random() < 0.2: # Probability reduced because it runs every tick if not on cooldown
                     dx, dy = random.choice([(0,1), (0,-1), (1,0), (-1,0)])
                     self.move_entity(mob.id, dx, dy)
+                    mob.last_move_time = current_time
                     moved = True
 
             elif self.difficulty == Difficulty.NORMAL:
@@ -528,16 +590,19 @@ class GameInstance:
                 if target_player and dist <= 1:
                     dx, dy = target_player.pos.x - mob.pos.x, target_player.pos.y - mob.pos.y
                     self.move_entity(mob.id, dx, dy)
+                    mob.last_move_time = current_time
                     moved = True
                 elif target_player and self._is_in_los(mob.pos, target_player.pos):
                     # Move towards player if in LOS
                     step = self._get_next_step_to(mob.pos, target_player.pos)
                     if step:
                         self.move_entity(mob.id, step[0], step[1])
+                        mob.last_move_time = current_time
                         moved = True
-                elif random.random() < 0.05:
+                elif random.random() < 0.2:
                     dx, dy = random.choice([(0,1), (0,-1), (1,0), (-1,0)])
                     self.move_entity(mob.id, dx, dy)
+                    mob.last_move_time = current_time
                     moved = True
 
             elif self.difficulty == Difficulty.HARD:
@@ -545,16 +610,19 @@ class GameInstance:
                 if target_player and dist <= 1:
                     dx, dy = target_player.pos.x - mob.pos.x, target_player.pos.y - mob.pos.y
                     self.move_entity(mob.id, dx, dy)
+                    mob.last_move_time = current_time
                     moved = True
                 elif target_player and dist < 20:
                     # Pathfind to player
                     step = self._get_next_step_to(mob.pos, target_player.pos)
                     if step:
                         self.move_entity(mob.id, step[0], step[1])
+                        mob.last_move_time = current_time
                         moved = True
-                elif random.random() < 0.05:
+                elif random.random() < 0.2:
                     dx, dy = random.choice([(0,1), (0,-1), (1,0), (-1,0)])
                     self.move_entity(mob.id, dx, dy)
+                    mob.last_move_time = current_time
                     moved = True
 
     def _find_nearest_player(self, pos: Position) -> Optional[Player]:
