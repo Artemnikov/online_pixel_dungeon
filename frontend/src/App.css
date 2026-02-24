@@ -230,6 +230,15 @@
   text-align: center;
 }
 
+.player-floor-label {
+  color: #d8d8d8;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.3px;
+  text-shadow: 1px 1px 1px #000;
+  text-transform: lowercase;
+}
+
 /* Bottom HUD & Toolbar */
 .game-hud-bottom {
   position: absolute;

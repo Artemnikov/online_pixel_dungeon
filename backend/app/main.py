@@ -5,7 +5,7 @@ import json
 import uuid
 import os
 from app.engine.manager import GameInstance
-from app.engine.entities.base import Player, Position
+from app.engine.entities.base import Position
 
 app = FastAPI(title="Online Pixel Dungeon API")
 
@@ -22,19 +22,23 @@ class ConnectionManager:
             self.active_connections[game_id] = {}
             self.game_instances[game_id] = GameInstance(game_id)
             self.last_sent_floor[game_id] = {}
-        
+
         self.active_connections[game_id][websocket] = player_id
-        
+
+    async def send_player_init(self, game_id: str, websocket: WebSocket, player_id: str):
         game = self.game_instances[game_id]
+        state = game.get_state(player_id)
+        player_floor = state.get("depth", 1)
+
         await websocket.send_json({
             "type": "INIT",
             "player_id": player_id,
-            "depth": game.depth,
-            "grid": game.grid,
+            "depth": player_floor,
+            "grid": state["grid"],
             "width": game.width,
             "height": game.height
         })
-        self.last_sent_floor[game_id][player_id] = game.depth
+        self.last_sent_floor.setdefault(game_id, {})[player_id] = player_floor
 
 
     def disconnect(self, game_id: str, websocket: WebSocket):
@@ -97,12 +101,13 @@ async def root():
 async def game_websocket(websocket: WebSocket, game_id: str, class_type: str = "warrior", difficulty: str = "normal"):
     player_id = str(uuid.uuid4())
     await manager.connect(game_id, websocket, player_id)
-    
+
     game = manager.game_instances[game_id]
     if game.player_count == 0: # First player sets difficulty
         game.change_difficulty(difficulty)
-        
-    player = game.add_player(player_id, f"Player_{player_id[:4]}", class_type)
+
+    game.add_player(player_id, f"Player_{player_id[:4]}", class_type)
+    await manager.send_player_init(game_id, websocket, player_id)
     
     try:
         while True:

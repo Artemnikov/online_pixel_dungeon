@@ -976,6 +976,7 @@ function App() {
               ></div>
               <div className="health-text-large">{Math.ceil(myStats.hp)} / {myStats.maxHp} HP</div>
             </div>
+            <div className="player-floor-label">floor: {depth}</div>
           </div>
         </div>
       </div>
