@@ -92,22 +92,11 @@ const hash2D = (x, y) => {
 };
 
 const getWsBaseUrl = () => {
-  const configuredApiUrl = import.meta.env.VITE_API_URL?.trim();
-  const configuredWsUrl = import.meta.env.VITE_WS_URL?.trim();
-
-  if (configuredWsUrl) {
-    return configuredWsUrl.replace(/\/$/, "");
-  }
-
-  if (configuredApiUrl) {
-    return configuredApiUrl
-      .replace(/^http:\/\//, "ws://")
-      .replace(/^https:\/\//, "wss://")
-      .replace(/\/$/, "");
-  }
-
-  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  return `${protocol}://${window.location.hostname}:8080`;
+  const apiBaseUrl = (import.meta.env.VITE_API_URL || "http://localhost:8080").trim();
+  return apiBaseUrl
+    .replace(/^http:\/\//, "ws://")
+    .replace(/^https:\/\//, "wss://")
+    .replace(/\/$/, "");
 };
 
 const getTile = (grid, x, y) => {
