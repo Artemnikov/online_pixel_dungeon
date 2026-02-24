@@ -166,6 +166,9 @@ async def game_websocket(websocket: WebSocket, game_id: str, class_type: str = "
                 target_y = message["target_y"]
                 game.perform_ranged_attack(player_id, item_id, target_x, target_y)
 
+            elif message["type"] == "SEARCH":
+                game.search(player_id)
+
 
     except WebSocketDisconnect:
         manager.disconnect(game_id, websocket)

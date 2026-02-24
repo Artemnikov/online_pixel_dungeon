@@ -70,7 +70,9 @@ const SEWER_TILESET = {
   woodFloor: { x: 4, y: 0 },
   cobbleFloor: { x: 3, y: 0 },
   waterFloor: { x: 3, y: 0 },
+  grassFloor: { x: 2, y: 0 },
   door: { x: 8, y: 3 },
+  lockedDoor: { x: 8, y: 3 },
   stairsUp: { x: 2, y: 1 },
   stairsDown: { x: 3, y: 1 },
   wallFlatVariants: [{ x: 0, y: 3 }, { x: 4, y: 3 }],
@@ -251,6 +253,12 @@ function App() {
 
   const useItem = (itemId) => {
     socketRef.current.send(JSON.stringify({ type: 'USE_ITEM', item_id: itemId }))
+  }
+
+  const triggerSearch = () => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'SEARCH' }))
+    }
   }
 
   const handleCanvasClick = (e) => {
@@ -491,6 +499,20 @@ function App() {
             if (event.type === 'PLAY_SOUND') {
               AudioManager.play(event.data.sound);
             }
+            if (event.type === 'MAP_PATCH' && event.data?.tiles) {
+              setGrid(prev => {
+                if (!prev || prev.length === 0) return prev;
+                const next = prev.map(row => row.slice());
+                event.data.tiles.forEach(tilePatch => {
+                  const { x, y, tile } = tilePatch;
+                  if (y >= 0 && y < next.length && x >= 0 && x < next[y].length) {
+                    next[y][x] = tile;
+                  }
+                });
+                gridRef.current = next;
+                return next;
+              });
+            }
             if (event.type === 'MOVE') {
               // console.log('[App] MOVE event:', event.data, 'MyID:', myPlayerIdRef.current);
               if (event.data.entity === myPlayerIdRef.current) {
@@ -561,6 +583,10 @@ function App() {
         setShowInventory(prev => !prev)
         return
       }
+      if (e.key === 'e') {
+        triggerSearch()
+        return
+      }
 
       let direction = null
       if (e.key === 'ArrowUp' || e.key === 'w') direction = 'UP'
@@ -593,7 +619,7 @@ function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [inventory, handleToolbarClick, handleToolbarDoubleClick, socketRef, setShowInventory]) // Added dependencies
+  }, [inventory, handleToolbarClick, handleToolbarDoubleClick, socketRef, setShowInventory, triggerSearch]) // Added dependencies
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -609,7 +635,9 @@ function App() {
       if (tile === 6) return SEWER_TILESET.woodFloor;
       if (tile === 7) return SEWER_TILESET.waterFloor;
       if (tile === 8) return SEWER_TILESET.cobbleFloor;
+      if (tile === 9) return SEWER_TILESET.grassFloor;
       if (tile === 3) return SEWER_TILESET.door;
+      if (tile === 10) return SEWER_TILESET.lockedDoor;
       if (tile === 4) return SEWER_TILESET.stairsUp;
       if (tile === 5) return SEWER_TILESET.stairsDown;
       return null;
@@ -681,6 +709,8 @@ function App() {
               else if (tile === 6) ctx.fillStyle = '#6f5234'; // FLOOR_WOOD
               else if (tile === 7) ctx.fillStyle = '#2f5f7a'; // FLOOR_WATER
               else if (tile === 8) ctx.fillStyle = '#666'; // FLOOR_COBBLE
+              else if (tile === 9) ctx.fillStyle = '#3f7f3f'; // FLOOR_GRASS
+              else if (tile === 10) ctx.fillStyle = '#8a5d23'; // LOCKED_DOOR
               else ctx.fillStyle = '#222';
               ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
             }
@@ -977,6 +1007,13 @@ function App() {
               <div className="health-text-large">{Math.ceil(myStats.hp)} / {myStats.maxHp} HP</div>
             </div>
             <div className="player-floor-label">floor: {depth}</div>
+            <button
+              type="button"
+              className="search-btn"
+              onClick={triggerSearch}
+            >
+              Search (E)
+            </button>
           </div>
         </div>
       </div>

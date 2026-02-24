@@ -50,6 +50,11 @@ class Item(BaseModel):
     type: str # "weapon", "wearable", "potion"
     pos: Optional[Position] = None
 
+
+class Key(Item):
+    type: str = "key"
+    key_id: str
+
 class Weapon(Item):
     type: str = "weapon"
     damage: int
@@ -151,7 +156,7 @@ class Player(Entity):
     level: int = 1
     floor_id: int = 1
     strength: int = 10
-    inventory: List[Union[Weapon, Wearable, Potion, Item]] = []
+    inventory: List[Union[Weapon, Wearable, Potion, Key, Item]] = []
     equipped_weapon: Optional[Weapon] = None
     equipped_wearable: Optional[Wearable] = None
     websocket_id: Optional[str] = None

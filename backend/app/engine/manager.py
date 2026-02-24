@@ -1,10 +1,15 @@
 import random
 import time
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-from app.engine.dungeon.generator import DungeonGenerator, TileType
+from app.engine.dungeon.generator import (
+    DungeonGenerator,
+    SewersProfile,
+    TileType,
+    TrapInfo,
+)
 from app.engine.entities.base import (
     Boomerang,
     Bow,
@@ -14,6 +19,7 @@ from app.engine.entities.base import (
     Faction,
     HealthPotion,
     Item,
+    Key,
     Mob as MobEntity,
     Player,
     Position,
@@ -28,6 +34,23 @@ from app.engine.entities.base import (
 
 
 MAX_FLOOR_ID = 50
+SEWERS_MAX_FLOOR = 4
+
+WALKABLE_TILES = {
+    TileType.FLOOR,
+    TileType.DOOR,
+    TileType.STAIRS_UP,
+    TileType.STAIRS_DOWN,
+    TileType.FLOOR_WOOD,
+    TileType.FLOOR_WATER,
+    TileType.FLOOR_COBBLE,
+    TileType.FLOOR_GRASS,
+}
+
+BLOCKS_LOS_TILES = {
+    TileType.WALL,
+    TileType.LOCKED_DOOR,
+}
 
 
 @dataclass
@@ -37,6 +60,12 @@ class FloorState:
     rooms: List[object]
     mobs: Dict[str, MobEntity]
     items: Dict[str, Item]
+    region: str = "generic"
+    hidden_doors: Dict[Tuple[int, int], int] = field(default_factory=dict)
+    locked_doors: Dict[Tuple[int, int], str] = field(default_factory=dict)
+    traps: Dict[Tuple[int, int], TrapInfo] = field(default_factory=dict)
+    key_spawns: Dict[str, Tuple[int, int]] = field(default_factory=dict)
+    generation_meta: Dict[str, object] = field(default_factory=dict)
 
 
 class GameInstance:
@@ -155,15 +184,39 @@ class GameInstance:
         self.depth = depth
 
         generator = DungeonGenerator(self.width, self.height)
-        grid, rooms = generator.generate(10 + depth, 4, 8 + (depth // 10))
+        floor: FloorState
+        if depth <= SEWERS_MAX_FLOOR:
+            sewers_result = generator.generate_sewers(SewersProfile())
+            floor = FloorState(
+                floor_id=depth,
+                grid=sewers_result.grid,
+                rooms=sewers_result.rooms,
+                mobs={},
+                items={},
+                region=sewers_result.metadata.region,
+                hidden_doors=dict(sewers_result.metadata.hidden_doors),
+                locked_doors=dict(sewers_result.metadata.locked_doors),
+                traps=dict(sewers_result.metadata.traps),
+                key_spawns=dict(sewers_result.metadata.key_spawns),
+                generation_meta={
+                    "layout_kind": sewers_result.metadata.layout_kind,
+                    "room_ids_by_kind": sewers_result.metadata.room_ids_by_kind,
+                    "room_connections": sewers_result.metadata.room_connections,
+                    "start_room_id": sewers_result.metadata.start_room_id,
+                    "end_room_id": sewers_result.metadata.end_room_id,
+                },
+            )
+        else:
+            grid, rooms = generator.generate(10 + depth, 4, 8 + (depth // 10))
+            floor = FloorState(
+                floor_id=depth,
+                grid=grid,
+                rooms=rooms,
+                mobs={},
+                items={},
+                region="legacy",
+            )
 
-        floor = FloorState(
-            floor_id=depth,
-            grid=grid,
-            rooms=rooms,
-            mobs={},
-            items={},
-        )
         self.floors[depth] = floor
         self._spawn_content(floor)
         return floor
@@ -199,12 +252,21 @@ class GameInstance:
                 TileType.FLOOR_WOOD,
                 TileType.FLOOR_WATER,
                 TileType.FLOOR_COBBLE,
+                TileType.FLOOR_GRASS,
             ]
         ]
 
         unsafe_floor_tiles = [
             pos for pos in floor_tiles if not self._is_in_safe_room(floor, pos[0], pos[1])
         ]
+
+        self._spawn_floor_keys(floor)
+        blocked_item_tiles = {
+            (item.pos.x, item.pos.y) for item in floor.items.values() if item.pos is not None
+        }
+        if blocked_item_tiles:
+            floor_tiles = [pos for pos in floor_tiles if pos not in blocked_item_tiles]
+            unsafe_floor_tiles = [pos for pos in unsafe_floor_tiles if pos not in blocked_item_tiles]
 
         if floor.floor_id % 5 == 0:
             self._spawn_boss(floor, unsafe_floor_tiles)
@@ -283,6 +345,16 @@ class GameInstance:
                 floor.items[item_id] = HealthPotion(id=item_id, pos=Position(x=x, y=y))
             else:
                 floor.items[item_id] = RevivingPotion(id=item_id, pos=Position(x=x, y=y))
+
+    def _spawn_floor_keys(self, floor: FloorState):
+        for key_id, (x, y) in floor.key_spawns.items():
+            item_id = str(uuid.uuid4())
+            floor.items[item_id] = Key(
+                id=item_id,
+                name="Rusty Key",
+                pos=Position(x=x, y=y),
+                key_id=key_id,
+            )
 
     def _spawn_boss(self, floor: FloorState, floor_tiles: List[Tuple[int, int]]):
         if not floor_tiles:
@@ -398,12 +470,104 @@ class GameInstance:
 
     def _move_player_to_floor(self, player: Player, target_floor_id: int, spawn_tile: int):
         target_floor_id = max(1, min(MAX_FLOOR_ID, target_floor_id))
-        floor = self._get_or_create_floor(target_floor_id)
+        self._get_or_create_floor(target_floor_id)
 
         player.floor_id = target_floor_id
         player.pos = self._get_stairs_pos(spawn_tile, floor_id=target_floor_id)
 
         self.depth = target_floor_id
+
+    def search(self, player_id: str):
+        player = self.players.get(player_id)
+        if not player:
+            return
+
+        floor = self._get_or_create_floor(player.floor_id)
+        patches: List[dict] = []
+
+        for dy in (-1, 0, 1):
+            for dx in (-1, 0, 1):
+                if dx == 0 and dy == 0:
+                    continue
+                tx = player.pos.x + dx
+                ty = player.pos.y + dy
+                if not (0 <= tx < self.width and 0 <= ty < self.height):
+                    continue
+
+                pos = (tx, ty)
+                if pos in floor.hidden_doors:
+                    actual_tile = floor.hidden_doors.pop(pos)
+                    floor.grid[ty][tx] = actual_tile
+                    patches.append({"x": tx, "y": ty, "tile": actual_tile})
+
+                trap = floor.traps.get(pos)
+                if trap and trap.hidden:
+                    trap.hidden = False
+                    if floor.grid[ty][tx] == TileType.FLOOR:
+                        floor.grid[ty][tx] = TileType.FLOOR_COBBLE
+                        patches.append({"x": tx, "y": ty, "tile": TileType.FLOOR_COBBLE})
+
+        if patches:
+            self.add_event("MAP_PATCH", {"tiles": patches}, floor_id=player.floor_id)
+
+        self.add_event("SEARCH", {"player": player_id, "revealed_tiles": len(patches)}, player_id=player_id)
+
+    def _try_unlock_locked_door(self, player: Player, floor: FloorState, x: int, y: int) -> bool:
+        key_id = floor.locked_doors.get((x, y))
+        if not key_id:
+            return False
+
+        key_idx = next(
+            (
+                idx
+                for idx, item in enumerate(player.inventory)
+                if isinstance(item, Key) and item.key_id == key_id
+            ),
+            -1,
+        )
+        if key_idx == -1:
+            return False
+
+        player.inventory.pop(key_idx)
+        floor.locked_doors.pop((x, y), None)
+        floor.grid[y][x] = TileType.DOOR
+
+        self.add_event("MAP_PATCH", {"tiles": [{"x": x, "y": y, "tile": TileType.DOOR}]}, floor_id=player.floor_id)
+        self.add_event("UNLOCK", {"player": player.id, "x": x, "y": y}, floor_id=player.floor_id)
+        return True
+
+    def _trigger_trap_if_needed(self, floor: FloorState, player: Player, floor_id: int):
+        pos = (player.pos.x, player.pos.y)
+        trap = floor.traps.get(pos)
+        if not trap or not trap.active:
+            return
+
+        patches: List[dict] = []
+        if trap.hidden:
+            trap.hidden = False
+
+        if floor.grid[player.pos.y][player.pos.x] == TileType.FLOOR:
+            floor.grid[player.pos.y][player.pos.x] = TileType.FLOOR_COBBLE
+            patches.append({"x": player.pos.x, "y": player.pos.y, "tile": TileType.FLOOR_COBBLE})
+
+        trap.active = False
+
+        damage = 2
+        dealt = player.take_damage(damage)
+
+        if patches:
+            self.add_event("MAP_PATCH", {"tiles": patches}, floor_id=floor_id)
+
+        self.add_event(
+            "TRAP_TRIGGERED",
+            {"player": player.id, "trap": trap.trap_type, "damage": dealt},
+            floor_id=floor_id,
+        )
+        if dealt > 0:
+            self.add_event("DAMAGE", {"target": player.id, "amount": dealt}, floor_id=floor_id)
+            self.add_event("PLAY_SOUND", {"sound": "HIT_BODY"}, floor_id=floor_id)
+            if player.hp / max(1, player.get_total_max_hp()) <= 0.3:
+                self.add_event("PLAY_SOUND", {"sound": "HEALTH_WARN"}, floor_id=floor_id)
 
     def move_entity(self, entity_id: str, dx: int, dy: int):
         floor_id, entity = self._get_floor_for_entity(entity_id)
@@ -491,15 +655,14 @@ class GameInstance:
             return
 
         tile = floor.grid[new_y][new_x]
-        if tile not in [
-            TileType.FLOOR,
-            TileType.DOOR,
-            TileType.STAIRS_UP,
-            TileType.STAIRS_DOWN,
-            TileType.FLOOR_WOOD,
-            TileType.FLOOR_WATER,
-            TileType.FLOOR_COBBLE,
-        ]:
+        if tile == TileType.LOCKED_DOOR:
+            if not isinstance(entity, Player):
+                return
+            if not self._try_unlock_locked_door(entity, floor, new_x, new_y):
+                return
+            tile = floor.grid[new_y][new_x]
+
+        if tile not in WALKABLE_TILES:
             return
 
         if not isinstance(entity, Player) and self._is_in_safe_room(floor, new_x, new_y):
@@ -520,6 +683,8 @@ class GameInstance:
                 if entity.add_to_inventory(item):
                     del floor.items[i_id]
                     self.add_event("PICKUP", {"player": entity.id, "item": item.id}, floor_id=floor_id)
+
+            self._trigger_trap_if_needed(floor, entity, floor_id)
 
         if isinstance(entity, Player) and tile == TileType.STAIRS_DOWN and entity.floor_id < MAX_FLOOR_ID:
             self._move_player_to_floor(entity, entity.floor_id + 1, TileType.STAIRS_UP)
@@ -740,7 +905,7 @@ class GameInstance:
                 return True
 
             if 0 <= curr_x < self.width and 0 <= curr_y < self.height:
-                if floor.grid[curr_y][curr_x] == TileType.WALL:
+                if floor.grid[curr_y][curr_x] in BLOCKS_LOS_TILES:
                     return False
 
             e2 = 2 * err
@@ -770,16 +935,7 @@ class GameInstance:
                 if (
                     0 <= nx < self.width
                     and 0 <= ny < self.height
-                    and floor.grid[ny][nx]
-                    in [
-                        TileType.FLOOR,
-                        TileType.DOOR,
-                        TileType.STAIRS_UP,
-                        TileType.STAIRS_DOWN,
-                        TileType.FLOOR_WOOD,
-                        TileType.FLOOR_WATER,
-                        TileType.FLOOR_COBBLE,
-                    ]
+                    and floor.grid[ny][nx] in WALKABLE_TILES
                     and (nx, ny) not in visited
                 ):
                     blocked = False
