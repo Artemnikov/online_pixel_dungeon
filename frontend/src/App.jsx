@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 import sewerTiles from './assets/pixel-dungeon/environment/tiles_sewers.png';
+import water0 from './assets/pixel-dungeon/environment/water0.png';
+import water1 from './assets/pixel-dungeon/environment/water1.png';
+import water2 from './assets/pixel-dungeon/environment/water2.png';
+import water3 from './assets/pixel-dungeon/environment/water3.png';
+import water4 from './assets/pixel-dungeon/environment/water4.png';
 import warriorSprite from './assets/pixel-dungeon/sprites/warrior.png';
 import mageSprite from './assets/pixel-dungeon/sprites/mage.png';
 import rogueSprite from './assets/pixel-dungeon/sprites/rogue.png';
@@ -12,6 +17,7 @@ import ratSprite from './assets/pixel-dungeon/sprites/rat.png';
 import batSprite from './assets/pixel-dungeon/sprites/bat.png';
 import AudioManager from './audio/AudioManager';
 import CharacterSelection from './CharacterSelection';
+import { drawSewerTile, getAnimatedWaterFrameIndex } from './rendering/sewers/draw';
 
 
 const TILE_SIZE = 32
@@ -65,32 +71,9 @@ const getItemSpriteCoords = (itemName, itemType) => {
   return ITEM_SPRITES["default"];
 }
 
-const SEWER_TILESET = {
-  floorVariants: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }],
-  woodFloor: { x: 4, y: 0 },
-  cobbleFloor: { x: 3, y: 0 },
-  waterFloor: { x: 3, y: 0 },
-  grassFloor: { x: 2, y: 0 },
-  door: { x: 8, y: 3 },
-  lockedDoor: { x: 8, y: 3 },
-  stairsUp: { x: 2, y: 1 },
-  stairsDown: { x: 3, y: 1 },
-  wallFlatVariants: [{ x: 0, y: 3 }, { x: 4, y: 3 }],
-  // Raised wall stitch set order: [center, open-right, open-left]
-  wallRaisedVariants: [
-    [{ x: 0, y: 5 }, { x: 1, y: 5 }, { x: 2, y: 5 }],
-    [{ x: 0, y: 6 }, { x: 1, y: 6 }, { x: 2, y: 6 }],
-  ],
-};
-
 const fallbackTileMap = {
   1: { x: 0, y: 3 }, // Wall
   2: { x: 0, y: 0 }, // Floor
-};
-
-const hash2D = (x, y) => {
-  const hash = ((x * 73856093) ^ (y * 19349663)) >>> 0;
-  return hash;
 };
 
 const getApiBaseUrl = () => {
@@ -115,14 +98,6 @@ const getWsBaseUrl = () => {
     .replace(/^http:\/\//, "ws://")
     .replace(/^https:\/\//, "wss://");
 };
-
-const getTile = (grid, x, y) => {
-  if (y < 0 || y >= grid.length) return 0;
-  if (x < 0 || x >= grid[y].length) return 0;
-  return grid[y][x];
-};
-
-const isWallTile = (tile) => tile === 1;
 
 const drawSpriteTile = (ctx, image, coords, x, y, flipX = false) => {
   if (!image || !coords) return;
@@ -209,6 +184,7 @@ function App() {
   const [camera, setCamera] = useState({ x: 0, y: 0 })
   const [assetImages, setAssetImages] = useState({
     tiles: null,
+    waterFrames: [null, null, null, null, null],
     warrior: null,
     mage: null,
     rogue: null,
@@ -219,15 +195,54 @@ function App() {
   });
 
   useEffect(() => {
-    const loadImage = (src, key) => {
+    const loadImage = (src, key, onLoad) => {
       const img = new Image();
       img.src = src;
       img.onload = () => {
-        setAssetImages(prev => ({ ...prev, [key]: img }));
+        if (onLoad) {
+          onLoad(img);
+        } else {
+          setAssetImages(prev => ({ ...prev, [key]: img }));
+        }
       };
     }
 
     loadImage(sewerTiles, 'tiles');
+    loadImage(water0, 'water0', (img) => {
+      setAssetImages(prev => {
+        const nextFrames = prev.waterFrames.slice();
+        nextFrames[0] = img;
+        return { ...prev, waterFrames: nextFrames };
+      });
+    });
+    loadImage(water1, 'water1', (img) => {
+      setAssetImages(prev => {
+        const nextFrames = prev.waterFrames.slice();
+        nextFrames[1] = img;
+        return { ...prev, waterFrames: nextFrames };
+      });
+    });
+    loadImage(water2, 'water2', (img) => {
+      setAssetImages(prev => {
+        const nextFrames = prev.waterFrames.slice();
+        nextFrames[2] = img;
+        return { ...prev, waterFrames: nextFrames };
+      });
+    });
+    loadImage(water3, 'water3', (img) => {
+      setAssetImages(prev => {
+        const nextFrames = prev.waterFrames.slice();
+        nextFrames[3] = img;
+        return { ...prev, waterFrames: nextFrames };
+      });
+    });
+    loadImage(water4, 'water4', (img) => {
+      setAssetImages(prev => {
+        const nextFrames = prev.waterFrames.slice();
+        nextFrames[4] = img;
+        return { ...prev, waterFrames: nextFrames };
+      });
+    });
     loadImage(warriorSprite, 'warrior');
     loadImage(mageSprite, 'mage');
     loadImage(rogueSprite, 'rogue');
@@ -627,43 +642,7 @@ function App() {
     const ctx = canvas.getContext('2d');
     let animationFrameId;
 
-    const sewerFloorCoords = (tile, x, y) => {
-      if (tile === 2) {
-        const idx = hash2D(x, y) % SEWER_TILESET.floorVariants.length;
-        return SEWER_TILESET.floorVariants[idx];
-      }
-      if (tile === 6) return SEWER_TILESET.woodFloor;
-      if (tile === 7) return SEWER_TILESET.waterFloor;
-      if (tile === 8) return SEWER_TILESET.cobbleFloor;
-      if (tile === 9) return SEWER_TILESET.grassFloor;
-      if (tile === 3) return SEWER_TILESET.door;
-      if (tile === 10) return SEWER_TILESET.lockedDoor;
-      if (tile === 4) return SEWER_TILESET.stairsUp;
-      if (tile === 5) return SEWER_TILESET.stairsDown;
-      return null;
-    };
-
-    const drawSewerWall = (x, y) => {
-      const leftTile = getTile(grid, x - 1, y);
-      const rightTile = getTile(grid, x + 1, y);
-      const belowTile = getTile(grid, x, y + 1);
-
-      const leftWall = isWallTile(leftTile);
-      const rightWall = isWallTile(rightTile);
-      const belowWall = isWallTile(belowTile);
-
-      const variantIdx = hash2D(x, y) % SEWER_TILESET.wallFlatVariants.length;
-      drawSpriteTile(ctx, assetImages.tiles, SEWER_TILESET.wallFlatVariants[variantIdx], x, y);
-
-      if (!belowWall) {
-        let raisedVariant = 0;
-        if (!rightWall) raisedVariant += 1;
-        if (!leftWall) raisedVariant += 2;
-        drawSpriteTile(ctx, assetImages.tiles, SEWER_TILESET.wallRaisedVariants[variantIdx][raisedVariant], x, y);
-      }
-    };
-
-    const drawGrid = () => {
+    const drawGrid = (waterFrameIndex) => {
       const useSewerTiles = depth <= 5;
 
       for (let y = 0; y < grid.length; y++) {
@@ -682,16 +661,16 @@ function App() {
             let tileDrawn = false;
 
             if (useSewerTiles && assetImages.tiles) {
-              if (tile === 1) {
-                drawSewerWall(x, y);
-                tileDrawn = true;
-              } else {
-                const sewerCoords = sewerFloorCoords(tile, x, y);
-                if (sewerCoords) {
-                  drawSpriteTile(ctx, assetImages.tiles, sewerCoords, x, y);
-                  tileDrawn = true;
-                }
-              }
+              tileDrawn = drawSewerTile(
+                ctx,
+                assetImages.tiles,
+                assetImages.waterFrames,
+                grid,
+                x,
+                y,
+                tile,
+                waterFrameIndex
+              );
             }
 
             if (!tileDrawn) {
@@ -954,7 +933,11 @@ function App() {
       ctx.save();
       ctx.translate(-cameraX, -cameraY);
 
-      drawGrid();
+      const waterFrameIndex = getAnimatedWaterFrameIndex(
+        performance.now(),
+        assetImages.waterFrames.filter(Boolean).length || 1
+      );
+      drawGrid(waterFrameIndex);
       drawItems();
       drawMobs();
       drawPlayers();
