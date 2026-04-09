@@ -18,6 +18,7 @@ import batSprite from './assets/pixel-dungeon/sprites/bat.png';
 import AudioManager from './audio/AudioManager';
 import sewers1Music from './assets/pixel-dungeon/themes/sewers_1.ogg';
 import CharacterSelection from './CharacterSelection';
+import WelcomeScreen from './WelcomeScreen';
 import { drawSewerTile, getAnimatedWaterFrameIndex } from './rendering/sewers/draw';
 
 
@@ -161,7 +162,7 @@ function App() {
   const projectilesRef = useRef([])
   const lastKeyRef = useRef({ key: null, time: 0 }) // For double-tap detection
 
-  const [gameState, setGameState] = useState('SELECT'); // 'SELECT', 'PLAYING'
+  const [gameState, setGameState] = useState('WELCOME'); // 'WELCOME', 'SELECT', 'PLAYING'
   const [selectedClass, setSelectedClass] = useState('warrior');
 
   const [myStats, setMyStats] = useState({ hp: 0, maxHp: 10, name: "" })
@@ -970,6 +971,10 @@ function App() {
 
   // Calculate toolbar items (first 5 items)
   const toolbarItems = Array.from({ length: 5 }).map((_, i) => inventory[i] || null);
+
+  if (gameState === 'WELCOME') {
+    return <WelcomeScreen onStart={() => setGameState('SELECT')} />;
+  }
 
   if (gameState === 'SELECT') {
     return <CharacterSelection onSelect={(c, d) => {

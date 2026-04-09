@@ -27,6 +27,12 @@ class CorridorsMixin:
             for y in range(room.y, room.y + room.height):
                 for x in range(room.x, room.x + room.width):
                     mask[y][x] = room.room_id
+            # Also block wall ring so corridors cannot route through it
+            for y in range(room.y - 1, room.y + room.height + 1):
+                for x in range(room.x - 1, room.x + room.width + 1):
+                    if 0 <= x < self.width and 0 <= y < self.height:
+                        if mask[y][x] == -1:
+                            mask[y][x] = room.room_id
         return mask
 
     def _select_connection_points(
@@ -218,9 +224,43 @@ class CorridorsMixin:
             TileType.STAIRS_DOWN, TileType.FLOOR_WOOD, TileType.FLOOR_WATER,
             TileType.FLOOR_COBBLE, TileType.FLOOR_GRASS, TileType.LOCKED_DOOR,
         }
+        # First pass: classify room wall rings by geometry — authoritative and
+        # immune to corridor-adjacency ambiguity.
+        room_classified: set = set()
+        for room in self.rooms:
+            top_y    = room.y - 1
+            bottom_y = room.y + room.height
+            left_x   = room.x - 1
+            right_x  = room.x + room.width
+            # Top row (face south toward room floor)
+            if 0 <= top_y < self.height:
+                for x in range(room.x - 1, room.x + room.width + 1):
+                    if 0 <= x < self.width and self.grid[top_y][x] == TileType.WALL:
+                        self.grid[top_y][x] = TileType.WALL_TOP
+                        room_classified.add((x, top_y))
+            # Bottom row (face north toward room floor)
+            if 0 <= bottom_y < self.height:
+                for x in range(room.x - 1, room.x + room.width + 1):
+                    if 0 <= x < self.width and self.grid[bottom_y][x] == TileType.WALL:
+                        self.grid[bottom_y][x] = TileType.WALL_BOTTOM
+                        room_classified.add((x, bottom_y))
+            # Left column (face east toward room floor)
+            if 0 <= left_x < self.width:
+                for y in range(room.y, room.y + room.height):
+                    if 0 <= y < self.height and self.grid[y][left_x] == TileType.WALL:
+                        self.grid[y][left_x] = TileType.WALL_LEFT
+                        room_classified.add((left_x, y))
+            # Right column (face west toward room floor)
+            if 0 <= right_x < self.width:
+                for y in range(room.y, room.y + room.height):
+                    if 0 <= y < self.height and self.grid[y][right_x] == TileType.WALL:
+                        self.grid[y][right_x] = TileType.WALL_RIGHT
+                        room_classified.add((right_x, y))
+        # Second pass: classify corridor walls that were not part of any room
+        # wall ring, using neighbor-based heuristic.
         for y in range(self.height):
             for x in range(self.width):
-                if self.grid[y][x] != TileType.WALL:
+                if (x, y) in room_classified or self.grid[y][x] != TileType.WALL:
                     continue
                 south = y + 1 < self.height and self.grid[y + 1][x] in walkable
                 north = y - 1 >= 0          and self.grid[y - 1][x] in walkable
