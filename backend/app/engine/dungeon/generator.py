@@ -1,5 +1,6 @@
 import random
 from collections import deque
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from app.engine.dungeon.constants import RoomKind, TileType, TrapType  # noqa: F401 — re-exported
@@ -63,11 +64,44 @@ class DungeonGenerator(SewersGenerationMixin, CorridorsMixin, TerrainMixin):
 
         for _ in range(120):
             try:
-                return self._generate_sewers_attempt(profile)
+                result = self._generate_sewers_attempt(profile)
+                self._save_debug_map(result.grid)
+                return result
             except RuntimeError:
                 continue
 
         raise RuntimeError("Failed to generate Sewers layout after multiple attempts")
+
+    def _save_debug_map(self, grid: List[List[int]]) -> None:
+        _CHARS = {
+            TileType.VOID:        ' ',
+            TileType.WALL:        '#',
+            TileType.FLOOR:       '.',
+            TileType.DOOR:        '+',
+            TileType.STAIRS_UP:   'U',
+            TileType.STAIRS_DOWN: 'D',
+            TileType.FLOOR_WOOD:  ',',
+            TileType.FLOOR_WATER: '~',
+            TileType.FLOOR_COBBLE:':',
+            TileType.FLOOR_GRASS: '"',
+            TileType.LOCKED_DOOR: 'X',
+            TileType.WALL_TOP:    '^',
+            TileType.WALL_LEFT:   '<',
+            TileType.WALL_RIGHT:  '>',
+            TileType.WALL_BOTTOM: 'v',
+        }
+        lines = [''.join(_CHARS.get(tile, '?') for tile in row) for row in grid]
+        legend = (
+            "Legend: ' '=VOID  #=WALL  .=FLOOR  +=DOOR  X=LOCKED_DOOR\n"
+            "        U=STAIRS_UP  D=STAIRS_DOWN  ,=FLOOR_WOOD  ~=WATER\n"
+            "        :=COBBLE  \"=GRASS  ^=WALL_TOP  v=WALL_BOTTOM  <=WALL_LEFT  >=WALL_RIGHT\n"
+        )
+        out = Path(__file__).parents[3] / "debug_map.txt"
+        try:
+            out.write_text(legend + '\n'.join(lines) + '\n')
+            print(f"[debug] map saved to {out}")
+        except Exception as e:
+            print(f"[debug] failed to save map: {e}")
 
     def is_connected(self) -> bool:
         if not self.rooms:
