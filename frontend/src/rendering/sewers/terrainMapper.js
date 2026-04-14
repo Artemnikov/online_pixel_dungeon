@@ -35,6 +35,7 @@ const tileInstr = (asset) => ({
   srcIndex: asset.atlasIndex,
   quadrant: QUADRANT.FULL,
   ...(asset.rotate != null && { rotate: asset.rotate }),
+  ...(asset.srcOffset != null && { srcOffset: asset.srcOffset }),
 });
 
 const getTerrainQuadrants = (grid, x, y, matcher, centerVariants, edgeByQuadrant, salt) => {

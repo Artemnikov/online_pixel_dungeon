@@ -27,7 +27,7 @@ export const BACKEND_TILE = {
   WALL_TOP: { id: 11, atlasIndex: atlasIndex(0, 5) },
   WALL_LEFT: { id: 12, atlasIndex: atlasIndex(3, 9) },
   WALL_RIGHT: { id: 13, atlasIndex: atlasIndex(4, 9) },
-  WALL_BOTTOM: { id: 14, atlasIndex: atlasIndex(0, 12), rotate: 180 },
+  WALL_BOTTOM: { id: 14, atlasIndex: atlasIndex(0, 12), rotate: 180, srcOffset: { y: -3 } },
 };
 
 export const toAtlasCoords = (index) => ({
