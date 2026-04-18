@@ -14,6 +14,8 @@ class TileType:
     WALL_LEFT = 12
     WALL_RIGHT = 13
     WALL_BOTTOM = 14
+    WALL_BOTTOM_LEFT = 15
+    WALL_BOTTOM_RIGHT = 16
 
 
 class RoomKind:

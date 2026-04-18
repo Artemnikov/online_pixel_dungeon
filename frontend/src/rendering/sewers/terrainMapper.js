@@ -85,7 +85,8 @@ export const getSewerTerrainInstructions = (grid, x, y, tile, frameIndex = 0) =>
     ];
 
     if (isWallTile(getTile(grid, x, y - 1))) {
-      instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_LINTEL, quadrant: QUADRANT.FULL, alpha: 0.95 });
+      instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_LINTEL, quadrant: QUADRANT.TL, alpha: 0.95 });
+      instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_LINTEL, quadrant: QUADRANT.TR, alpha: 0.95 });
     }
     if (isWallTile(getTile(grid, x - 1, y))) {
       instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_SIDE_LEFT, quadrant: QUADRANT.TL, alpha: 0.9 });
@@ -135,6 +136,8 @@ export const getSewerTerrainInstructions = (grid, x, y, tile, frameIndex = 0) =>
   if (tile === BACKEND_TILE.WALL_BOTTOM.id) return [tileInstr(BACKEND_TILE.WALL_BOTTOM)];
   if (tile === BACKEND_TILE.WALL_LEFT.id) return [tileInstr(BACKEND_TILE.WALL_LEFT)];
   if (tile === BACKEND_TILE.WALL_RIGHT.id) return [tileInstr(BACKEND_TILE.WALL_RIGHT)];
+  if (tile === BACKEND_TILE.WALL_BOTTOM_LEFT.id) return [tileInstr(BACKEND_TILE.WALL_BOTTOM_LEFT)];
+  if (tile === BACKEND_TILE.WALL_BOTTOM_RIGHT.id) return [tileInstr(BACKEND_TILE.WALL_BOTTOM_RIGHT)];
 
   return [];
 };

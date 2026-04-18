@@ -16,7 +16,7 @@ export const BACKEND_TILE = {
   VOID: { id: 0, atlasIndex: null },
   WALL: { id: 1, atlasIndex: null },
   FLOOR: { id: 2, atlasIndex: null },
-  DOOR: { id: 3, atlasIndex: atlasIndex(7, 3) },
+  DOOR: { id: 3, atlasIndex: atlasIndex(9, 3) },
   STAIRS_UP: { id: 4, atlasIndex: atlasIndex(0, 1) },
   STAIRS_DOWN: { id: 5, atlasIndex: atlasIndex(1, 1) },
   FLOOR_WOOD: { id: 6, atlasIndex: atlasIndex(4, 0) },
@@ -28,6 +28,8 @@ export const BACKEND_TILE = {
   WALL_LEFT: { id: 12, atlasIndex: atlasIndex(3, 9) },
   WALL_RIGHT: { id: 13, atlasIndex: atlasIndex(4, 9) },
   WALL_BOTTOM: { id: 14, atlasIndex: atlasIndex(0, 12), rotate: 180, srcOffset: { y: -3 } },
+  WALL_BOTTOM_LEFT:  { id: 15, atlasIndex: atlasIndex(3, 9) },
+  WALL_BOTTOM_RIGHT: { id: 16, atlasIndex: atlasIndex(4, 9) },
 };
 
 export const toAtlasCoords = (index) => ({
@@ -107,6 +109,8 @@ export const isWallTile = (tile) =>
   tile === BACKEND_TILE.WALL_TOP.id ||
   tile === BACKEND_TILE.WALL_LEFT.id ||
   tile === BACKEND_TILE.WALL_RIGHT.id ||
-  tile === BACKEND_TILE.WALL_BOTTOM.id;
+  tile === BACKEND_TILE.WALL_BOTTOM.id ||
+  tile === BACKEND_TILE.WALL_BOTTOM_LEFT.id ||
+  tile === BACKEND_TILE.WALL_BOTTOM_RIGHT.id;
 export const isWaterTile = (tile) => tile === BACKEND_TILE.FLOOR_WATER.id;
 export const isGrassTile = (tile) => tile === BACKEND_TILE.FLOOR_GRASS.id;

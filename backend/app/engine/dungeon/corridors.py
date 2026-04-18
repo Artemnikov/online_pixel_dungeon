@@ -301,8 +301,8 @@ class CorridorsMixin:
             for cx, cy, tile in (
                 (room.x - 1,          room.y - 1,          TileType.WALL_LEFT),
                 (room.x + room.width,  room.y - 1,          TileType.WALL_RIGHT),
-                (room.x - 1,          room.y + room.height, TileType.VOID),
-                (room.x + room.width,  room.y + room.height, TileType.VOID),
+                (room.x - 1,          room.y + room.height, TileType.WALL_BOTTOM_LEFT),
+                (room.x + room.width,  room.y + room.height, TileType.WALL_BOTTOM_RIGHT),
             ):
                 if 0 <= cx < self.width and 0 <= cy < self.height:
                     self.grid[cy][cx] = tile
