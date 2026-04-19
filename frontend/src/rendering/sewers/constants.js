@@ -16,7 +16,7 @@ export const BACKEND_TILE = {
   VOID: { id: 0, atlasIndex: null },
   WALL: { id: 1, atlasIndex: null },
   FLOOR: { id: 2, atlasIndex: null },
-  DOOR: { id: 3, atlasIndex: atlasIndex(9, 3) },
+  DOOR: { id: 3, atlasIndex: atlasIndex(8, 3) },
   STAIRS_UP: { id: 4, atlasIndex: atlasIndex(0, 1) },
   STAIRS_DOWN: { id: 5, atlasIndex: atlasIndex(1, 1) },
   FLOOR_WOOD: { id: 6, atlasIndex: atlasIndex(4, 0) },
@@ -43,8 +43,6 @@ export const TERRAIN_INDEX = {
   FLOOR_VARIANTS: [atlasIndex(0, 0), atlasIndex(1, 0), atlasIndex(2, 0)],
   FLOOR_ALT_VARIANTS: [atlasIndex(6, 0), atlasIndex(7, 0), atlasIndex(8, 0)],
   DOOR_LINTEL: atlasIndex(9, 3),
-  DOOR_SIDE_LEFT: atlasIndex(10, 3),
-  DOOR_SIDE_RIGHT: atlasIndex(12, 3),
 
   GRASS_CENTER: [atlasIndex(2, 4), atlasIndex(5, 4), atlasIndex(6, 4)],
   GRASS_EDGE: {

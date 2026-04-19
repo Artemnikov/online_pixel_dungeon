@@ -89,14 +89,13 @@ export const getSewerTerrainInstructions = (grid, x, y, tile, frameIndex = 0) =>
       instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_LINTEL, quadrant: QUADRANT.TR, alpha: 0.95 });
     }
     if (isWallTile(getTile(grid, x - 1, y))) {
-      instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_SIDE_LEFT, quadrant: QUADRANT.TL, alpha: 0.9 });
-      instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_SIDE_LEFT, quadrant: QUADRANT.BL, alpha: 0.9 });
+      instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_LINTEL, quadrant: QUADRANT.TL, alpha: 0.95, rotate: 270 });
+      instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_LINTEL, quadrant: QUADRANT.BL, alpha: 0.95, rotate: 270 });
     }
     if (isWallTile(getTile(grid, x + 1, y))) {
-      instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_SIDE_RIGHT, quadrant: QUADRANT.TR, alpha: 0.9 });
-      instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_SIDE_RIGHT, quadrant: QUADRANT.BR, alpha: 0.9 });
+      instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_LINTEL, quadrant: QUADRANT.TR, alpha: 0.95, rotate: 90 });
+      instructions.push({ srcIndex: TERRAIN_INDEX.DOOR_LINTEL, quadrant: QUADRANT.BR, alpha: 0.95, rotate: 90 });
     }
-
     return instructions;
   }
 
