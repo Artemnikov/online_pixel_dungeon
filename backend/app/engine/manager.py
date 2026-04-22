@@ -911,6 +911,35 @@ class GameInstance:
     def _get_distance(self, p1: Position, p2: Position) -> int:
         return abs(p1.x - p2.x) + abs(p1.y - p2.y)
 
+    def _is_door_open(self, floor: FloorState, x: int, y: int) -> bool:
+        for player in self.players.values():
+            if player.floor_id == floor.floor_id and player.pos.x == x and player.pos.y == y:
+                return True
+        for mob in floor.mobs.values():
+            if mob.is_alive and mob.pos.x == x and mob.pos.y == y:
+                return True
+        for item in floor.items.values():
+            if item.pos and item.pos.x == x and item.pos.y == y:
+                return True
+        return False
+
+    def _get_open_doors(self, floor: FloorState):
+        occupied = set()
+        for player in self.players.values():
+            if player.floor_id == floor.floor_id:
+                occupied.add((player.pos.x, player.pos.y))
+        for mob in floor.mobs.values():
+            if mob.is_alive:
+                occupied.add((mob.pos.x, mob.pos.y))
+        for item in floor.items.values():
+            if item.pos:
+                occupied.add((item.pos.x, item.pos.y))
+        return [
+            [x, y] for x, y in occupied
+            if 0 <= x < self.width and 0 <= y < self.height
+            and floor.grid[y][x] == TileType.DOOR
+        ]
+
     def _is_in_los(self, p1: Position, p2: Position, floor_id: Optional[int] = None) -> bool:
         floor = self._get_or_create_floor(floor_id or self.depth)
 
@@ -928,7 +957,10 @@ class GameInstance:
                 return True
 
             if 0 <= curr_x < self.width and 0 <= curr_y < self.height:
-                if floor.grid[curr_y][curr_x] in BLOCKS_LOS_TILES:
+                tile = floor.grid[curr_y][curr_x]
+                if tile in BLOCKS_LOS_TILES:
+                    return False
+                if tile == TileType.DOOR and not self._is_door_open(floor, curr_x, curr_y):
                     return False
 
             e2 = 2 * err
@@ -1031,6 +1063,7 @@ class GameInstance:
                 "mobs": [m.dict() for m in floor.mobs.values() if m.is_alive and (m.pos.x, m.pos.y) in visible_set],
                 "items": [i.dict() for i in floor.items.values() if i.pos and (i.pos.x, i.pos.y) in visible_set],
                 "visible_tiles": visible_tiles,
+                "open_doors": self._get_open_doors(floor),
                 "grid": floor.grid,
             }
 
@@ -1040,5 +1073,6 @@ class GameInstance:
             "players": [p.dict() for p in self._players_on_floor(self.depth)],
             "mobs": [m.dict() for m in floor.mobs.values() if m.is_alive],
             "items": [i.dict() for i in floor.items.values() if i.pos],
+            "open_doors": self._get_open_doors(floor),
             "grid": floor.grid,
         }

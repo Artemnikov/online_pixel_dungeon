@@ -51,7 +51,7 @@ const getTerrainQuadrants = (grid, x, y, matcher, centerVariants, edgeByQuadrant
   return out;
 };
 
-export const getSewerTerrainInstructions = (grid, x, y, tile, frameIndex = 0) => {
+export const getSewerTerrainInstructions = (grid, x, y, tile, frameIndex = 0, openDoors = new Set()) => {
   if (tile === BACKEND_TILE.WALL.id || tile === BACKEND_TILE.VOID.id) return [];
 
   if (tile === BACKEND_TILE.FLOOR.id) {
@@ -76,7 +76,7 @@ export const getSewerTerrainInstructions = (grid, x, y, tile, frameIndex = 0) =>
     ];
   }
 
-  if (tile === BACKEND_TILE.DOOR.id) return [tileInstr(BACKEND_TILE.DOOR)];
+  if (tile === BACKEND_TILE.DOOR.id) return [tileInstr(openDoors.has(`${x},${y}`) ? BACKEND_TILE.OPEN_DOOR : BACKEND_TILE.DOOR)];
   if (tile === BACKEND_TILE.LOCKED_DOOR.id) return [tileInstr(BACKEND_TILE.LOCKED_DOOR)];
 
   if (tile === BACKEND_TILE.FLOOR_WATER.id) {

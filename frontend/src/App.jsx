@@ -174,6 +174,7 @@ function App() {
   const [difficulty, setDifficulty] = useState("normal")
   const [depth, setDepth] = useState(1)
   const visionRef = useRef({ visible: new Set(), discovered: new Set() })
+  const openDoorsRef = useRef(new Set())
   const musicRef = useRef(null)
 
   useEffect(() => { targetingModeRef.current = targetingMode; }, [targetingMode]);
@@ -335,6 +336,7 @@ function App() {
     }
 
     if (socketRef.current?.readyState === WebSocket.OPEN) {
+      isRefocusingRef.current = true;
       socketRef.current.send(JSON.stringify({ type: 'MOVE_TO', x: tileX, y: tileY }));
     }
   };
@@ -547,6 +549,10 @@ function App() {
           newVisible.forEach(t => visionRef.current.discovered.add(t))
         }
 
+        if (data.open_doors) {
+          openDoorsRef.current = new Set(data.open_doors.map(d => `${d[0]},${d[1]}`))
+        }
+
         if (data.events) {
           data.events.forEach(event => {
             if (event.type === 'PLAY_SOUND') {
@@ -740,6 +746,7 @@ function App() {
           const worldY = clickY + cameraLerpRef.current.y;
           const tileX = Math.floor(worldX / TILE_SIZE);
           const tileY = Math.floor(worldY / TILE_SIZE);
+          isRefocusingRef.current = true;
           socketRef.current.send(JSON.stringify({ type: 'MOVE_TO', x: tileX, y: tileY }));
         }
       }
@@ -795,7 +802,8 @@ function App() {
                 x,
                 y,
                 tile,
-                waterFrameIndex
+                waterFrameIndex,
+                openDoorsRef.current
               );
             }
 

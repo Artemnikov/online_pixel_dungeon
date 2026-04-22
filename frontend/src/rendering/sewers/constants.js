@@ -17,6 +17,7 @@ export const BACKEND_TILE = {
   WALL: { id: 1, atlasIndex: null, seethrough: false },
   FLOOR: { id: 2, atlasIndex: null, seethrough: true },
   DOOR: { id: 3, atlasIndex: atlasIndex(8, 3), seethrough: false },
+  OPEN_DOOR: { id: 3, atlasIndex: atlasIndex(9, 3), seethrough: true },
   STAIRS_UP: { id: 4, atlasIndex: atlasIndex(0, 1), seethrough: true },
   STAIRS_DOWN: { id: 5, atlasIndex: atlasIndex(1, 1), seethrough: true },
   FLOOR_WOOD: { id: 6, atlasIndex: atlasIndex(4, 0), seethrough: true },

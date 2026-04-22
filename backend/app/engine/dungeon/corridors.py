@@ -237,29 +237,30 @@ class CorridorsMixin:
     def _add_corridor_walls(self, path: List[Tuple[int, int]], room_mask: List[List[int]]) -> None:
         path_set = set(path)
 
-        def touches_room(x: int, y: int) -> bool:
-            for cdx, cdy in ((1, 0), (-1, 0), (0, 1), (0, -1),
-                             (2, 0), (-2, 0), (0, 2), (0, -2)):
-                cx, cy = x + cdx, y + cdy
-                if 0 <= cx < self.width and 0 <= cy < self.height and room_mask[cy][cx] != -1:
+        def adjacent_to_room(px: int, py: int) -> bool:
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                nx, ny = px + dx, py + dy
+                if 0 <= nx < self.width and 0 <= ny < self.height and room_mask[ny][nx] != -1:
                     return True
             return False
 
         for px, py in path:
+            if adjacent_to_room(px, py):
+                continue
             for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                 nx, ny = px + dx, py + dy
                 if (nx, ny) in path_set:
                     continue
-                if self._in_bounds(nx, ny) and self.grid[ny][nx] == TileType.VOID and not touches_room(nx, ny):
+                if self._in_bounds(nx, ny) and self.grid[ny][nx] == TileType.VOID:
                     self.grid[ny][nx] = TileType.WALL
         for px, py in path:
+            if adjacent_to_room(px, py):
+                continue
             for dx, dy in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
                 nx, ny = px + dx, py + dy
                 if (nx, ny) in path_set:
                     continue
                 if not (self._in_bounds(nx, ny) and self.grid[ny][nx] == TileType.VOID):
-                    continue
-                if touches_room(nx, ny):
                     continue
                 if dy < 0:
                     self.grid[ny][nx] = TileType.WALL_LEFT if dx < 0 else TileType.WALL_RIGHT
