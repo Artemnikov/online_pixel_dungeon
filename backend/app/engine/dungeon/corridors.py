@@ -1,7 +1,7 @@
 import math
 import random
 from collections import deque
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from app.engine.dungeon.constants import TileType
 from app.engine.dungeon.models import Room
@@ -44,40 +44,66 @@ class CorridorsMixin:
         return mask
 
     def _select_connection_points(
-        self, room_a: Room, room_b: Room
+        self, room_a: Room, room_b: Room,
+        used_door_positions: Optional[Set[Tuple[int, int]]] = None,
     ) -> Optional[Tuple[Tuple[int, int], Tuple[int, int], Tuple[int, int], Tuple[int, int]]]:
+        used = used_door_positions or set()
         ax, ay = room_a.center
         bx, by = room_b.center
 
         if abs(bx - ax) >= abs(by - ay):
             if bx >= ax:
-                ya = random.randint(room_a.y + 1, room_a.y + room_a.height - 2)
-                yb = random.randint(room_b.y + 1, room_b.y + room_b.height - 2)
-                door_a = (room_a.x + room_a.width, ya)
+                wall_xa = room_a.x + room_a.width
+                cands_ya = [y for y in range(room_a.y + 1, room_a.y + room_a.height - 1)
+                            if not any(abs(y - dy) <= 1 for (dx, dy) in used if dx == wall_xa)]
+                ya = random.choice(cands_ya) if cands_ya else random.randint(room_a.y + 1, room_a.y + room_a.height - 2)
+                wall_xb = room_b.x - 1
+                cands_yb = [y for y in range(room_b.y + 1, room_b.y + room_b.height - 1)
+                            if not any(abs(y - dy) <= 1 for (dx, dy) in used if dx == wall_xb)]
+                yb = random.choice(cands_yb) if cands_yb else random.randint(room_b.y + 1, room_b.y + room_b.height - 2)
+                door_a = (wall_xa, ya)
                 outside_a = (door_a[0] + 1, ya)
-                door_b = (room_b.x - 1, yb)
+                door_b = (wall_xb, yb)
                 outside_b = (door_b[0] - 1, yb)
             else:
-                ya = random.randint(room_a.y + 1, room_a.y + room_a.height - 2)
-                yb = random.randint(room_b.y + 1, room_b.y + room_b.height - 2)
-                door_a = (room_a.x - 1, ya)
+                wall_xa = room_a.x - 1
+                cands_ya = [y for y in range(room_a.y + 1, room_a.y + room_a.height - 1)
+                            if not any(abs(y - dy) <= 1 for (dx, dy) in used if dx == wall_xa)]
+                ya = random.choice(cands_ya) if cands_ya else random.randint(room_a.y + 1, room_a.y + room_a.height - 2)
+                wall_xb = room_b.x + room_b.width
+                cands_yb = [y for y in range(room_b.y + 1, room_b.y + room_b.height - 1)
+                            if not any(abs(y - dy) <= 1 for (dx, dy) in used if dx == wall_xb)]
+                yb = random.choice(cands_yb) if cands_yb else random.randint(room_b.y + 1, room_b.y + room_b.height - 2)
+                door_a = (wall_xa, ya)
                 outside_a = (door_a[0] - 1, ya)
-                door_b = (room_b.x + room_b.width, yb)
+                door_b = (wall_xb, yb)
                 outside_b = (door_b[0] + 1, yb)
         else:
             if by >= ay:
-                xa = random.randint(room_a.x + 1, room_a.x + room_a.width - 2)
-                xb = random.randint(room_b.x + 1, room_b.x + room_b.width - 2)
-                door_a = (xa, room_a.y + room_a.height)
+                wall_ya = room_a.y + room_a.height
+                cands_xa = [x for x in range(room_a.x + 1, room_a.x + room_a.width - 1)
+                            if not any(abs(x - dx) <= 1 for (dx, dy) in used if dy == wall_ya)]
+                xa = random.choice(cands_xa) if cands_xa else random.randint(room_a.x + 1, room_a.x + room_a.width - 2)
+                wall_yb = room_b.y - 1
+                cands_xb = [x for x in range(room_b.x + 1, room_b.x + room_b.width - 1)
+                            if not any(abs(x - dx) <= 1 for (dx, dy) in used if dy == wall_yb)]
+                xb = random.choice(cands_xb) if cands_xb else random.randint(room_b.x + 1, room_b.x + room_b.width - 2)
+                door_a = (xa, wall_ya)
                 outside_a = (xa, door_a[1] + 1)
-                door_b = (xb, room_b.y - 1)
+                door_b = (xb, wall_yb)
                 outside_b = (xb, door_b[1] - 1)
             else:
-                xa = random.randint(room_a.x + 1, room_a.x + room_a.width - 2)
-                xb = random.randint(room_b.x + 1, room_b.x + room_b.width - 2)
-                door_a = (xa, room_a.y - 1)
+                wall_ya = room_a.y - 1
+                cands_xa = [x for x in range(room_a.x + 1, room_a.x + room_a.width - 1)
+                            if not any(abs(x - dx) <= 1 for (dx, dy) in used if dy == wall_ya)]
+                xa = random.choice(cands_xa) if cands_xa else random.randint(room_a.x + 1, room_a.x + room_a.width - 2)
+                wall_yb = room_b.y + room_b.height
+                cands_xb = [x for x in range(room_b.x + 1, room_b.x + room_b.width - 1)
+                            if not any(abs(x - dx) <= 1 for (dx, dy) in used if dy == wall_yb)]
+                xb = random.choice(cands_xb) if cands_xb else random.randint(room_b.x + 1, room_b.x + room_b.width - 2)
+                door_a = (xa, wall_ya)
                 outside_a = (xa, door_a[1] - 1)
-                door_b = (xb, room_b.y + room_b.height)
+                door_b = (xb, wall_yb)
                 outside_b = (xb, door_b[1] + 1)
 
         if not self._in_bounds(*outside_a) or not self._in_bounds(*outside_b):
@@ -237,30 +263,26 @@ class CorridorsMixin:
     def _add_corridor_walls(self, path: List[Tuple[int, int]], room_mask: List[List[int]]) -> None:
         path_set = set(path)
 
-        def adjacent_to_room(px: int, py: int) -> bool:
-            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                nx, ny = px + dx, py + dy
-                if 0 <= nx < self.width and 0 <= ny < self.height and room_mask[ny][nx] != -1:
-                    return True
-            return False
-
         for px, py in path:
-            if adjacent_to_room(px, py):
-                continue
             for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
                 nx, ny = px + dx, py + dy
                 if (nx, ny) in path_set:
                     continue
                 if self._in_bounds(nx, ny) and self.grid[ny][nx] == TileType.VOID:
                     self.grid[ny][nx] = TileType.WALL
+
         for px, py in path:
-            if adjacent_to_room(px, py):
-                continue
             for dx, dy in ((1, 1), (1, -1), (-1, 1), (-1, -1)):
                 nx, ny = px + dx, py + dy
                 if (nx, ny) in path_set:
                     continue
                 if not (self._in_bounds(nx, ny) and self.grid[ny][nx] == TileType.VOID):
+                    continue
+                if any(
+                    0 <= nx + adx < self.width and 0 <= ny + ady < self.height
+                    and room_mask[ny + ady][nx + adx] != -1
+                    for adx, ady in ((1, 0), (-1, 0), (0, 1), (0, -1))
+                ):
                     continue
                 if dy < 0:
                     self.grid[ny][nx] = TileType.WALL_LEFT if dx < 0 else TileType.WALL_RIGHT

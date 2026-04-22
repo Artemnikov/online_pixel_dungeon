@@ -1,6 +1,6 @@
 import math
 import random
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from app.engine.dungeon.constants import RoomKind, TileType
 from app.engine.dungeon.models import (
@@ -54,16 +54,19 @@ class SewersGenerationMixin:
 
         door_infos: List[DoorInfo] = []
         room_door_positions: Dict[int, List[int]] = {}
+        used_door_positions: Set[Tuple[int, int]] = set()
 
         for edge in edges:
             room_a = room_by_id[edge.a]
             room_b = room_by_id[edge.b]
 
-            connection = self._select_connection_points(room_a, room_b)
+            connection = self._select_connection_points(room_a, room_b, used_door_positions)
             if not connection:
                 raise RuntimeError("Could not find valid corridor connection")
 
             door_a, outside_a, door_b, outside_b = connection
+            used_door_positions.add(door_a)
+            used_door_positions.add(door_b)
             path = self._find_corridor_path(outside_a, outside_b, room_mask)
             if not path:
                 raise RuntimeError("Could not route corridor path")
