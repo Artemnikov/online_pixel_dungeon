@@ -436,7 +436,10 @@ function App() {
 
     const wsBaseUrl = getWsBaseUrl()
     const nameParam = playerName ? `&name=${encodeURIComponent(playerName)}` : '';
-    const ws = new WebSocket(`${wsBaseUrl}/ws/game/${gameId}?class_type=${selectedClass}&difficulty=${difficulty}${nameParam}`)
+    const urlParams = new URLSearchParams(window.location.search);
+    const adminSecret = urlParams.get('admin_secret') || '';
+    const adminParam = adminSecret ? `&admin_secret=${encodeURIComponent(adminSecret)}` : '';
+    const ws = new WebSocket(`${wsBaseUrl}/ws/game/${gameId}?class_type=${selectedClass}&difficulty=${difficulty}${nameParam}${adminParam}`)
     socketRef.current = ws
     let hasConnected = false
 
@@ -557,6 +560,18 @@ function App() {
           const newVisible = new Set(data.visible_tiles.map(t => `${t[0]},${t[1]}`))
           visionRef.current.visible = newVisible
           newVisible.forEach(t => visionRef.current.discovered.add(t))
+        }
+
+        const myPlayer = data.players.find(p => p.id === myPlayerIdRef.current)
+        if (myPlayer?.is_admin && gridRef.current.length > 0) {
+          const allTiles = new Set()
+          for (let y = 0; y < gridRef.current.length; y++) {
+            for (let x = 0; x < gridRef.current[0].length; x++) {
+              allTiles.add(`${x},${y}`)
+            }
+          }
+          visionRef.current.visible = allTiles
+          allTiles.forEach(t => visionRef.current.discovered.add(t))
         }
 
         if (data.open_doors) {

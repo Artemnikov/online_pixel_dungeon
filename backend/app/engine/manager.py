@@ -382,7 +382,7 @@ class GameInstance:
             faction=Faction.DUNGEON,
         )
 
-    def add_player(self, player_id: str, name: str, class_type: str = CharacterClass.WARRIOR) -> Player:
+    def add_player(self, player_id: str, name: str, class_type: str = CharacterClass.WARRIOR, is_admin: bool = False) -> Player:
         floor = self._get_or_create_floor(1)
         spawn_pos = self._get_stairs_pos(TileType.STAIRS_UP, floor_id=floor.floor_id)
 
@@ -460,6 +460,7 @@ class GameInstance:
             equipped_weapon=equipped_weapon,
             equipped_wearable=equipped_wearable,
             floor_id=1,
+            is_admin=is_admin,
         )
 
         player.hp = player.get_total_max_hp()
@@ -1052,10 +1053,22 @@ class GameInstance:
         if player_id and player_id in self.players:
             player = self.players[player_id]
             floor = self._get_or_create_floor(player.floor_id)
+            floor_players = [p for p in self._players_on_floor(player.floor_id)]
+
+            if player.is_admin:
+                all_tiles = [(x, y) for y in range(self.height) for x in range(self.width)]
+                return {
+                    "depth": player.floor_id,
+                    "players": [p.dict() for p in floor_players],
+                    "mobs": [m.dict() for m in floor.mobs.values() if m.is_alive],
+                    "items": [i.dict() for i in floor.items.values() if i.pos],
+                    "visible_tiles": all_tiles,
+                    "open_doors": self._get_open_doors(floor),
+                    "grid": floor.grid,
+                }
+
             visible_tiles = self.get_visible_tiles(player.pos, floor_id=player.floor_id)
             visible_set = set(visible_tiles)
-
-            floor_players = [p for p in self._players_on_floor(player.floor_id)]
 
             return {
                 "depth": player.floor_id,

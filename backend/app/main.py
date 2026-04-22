@@ -102,7 +102,7 @@ async def root():
     return {"message": "Online Pixel Dungeon Server is running"}
 
 @app.websocket("/ws/game/{game_id}")
-async def game_websocket(websocket: WebSocket, game_id: str, class_type: str = "warrior", difficulty: str = "normal", name: str = None):
+async def game_websocket(websocket: WebSocket, game_id: str, class_type: str = "warrior", difficulty: str = "normal", name: str = None, admin_secret: str = ""):
     player_id = str(uuid.uuid4())
     await manager.connect(game_id, websocket, player_id)
 
@@ -110,8 +110,9 @@ async def game_websocket(websocket: WebSocket, game_id: str, class_type: str = "
     if game.player_count == 0: # First player sets difficulty
         game.change_difficulty(difficulty)
 
-    player_name = name.strip()[:20] if name and name.strip() else f"Player_{player_id[:4]}"
-    game.add_player(player_id, player_name, class_type)
+    is_admin = bool(admin_secret and admin_secret == os.environ.get("ADMIN_SECRET", "admin"))
+    player_name = "admin" if is_admin else (name.strip()[:20] if name and name.strip() else f"Player_{player_id[:4]}")
+    game.add_player(player_id, player_name, class_type, is_admin=is_admin)
     await manager.send_player_init(game_id, websocket, player_id)
     
     try:

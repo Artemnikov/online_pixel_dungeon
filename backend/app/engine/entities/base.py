@@ -164,8 +164,11 @@ class Player(Entity):
     regen_ticks: int = 0
     path_queue: List[Tuple[int, int]] = []
     last_auto_move_time: float = 0.0
+    is_admin: bool = False
 
     def take_damage(self, amount: int):
+        if self.is_admin:
+            return 0
         if self.is_downed:
             return 0
             
