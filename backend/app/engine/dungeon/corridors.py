@@ -238,7 +238,8 @@ class CorridorsMixin:
         path_set = set(path)
 
         def touches_room(x: int, y: int) -> bool:
-            for cdx, cdy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            for cdx, cdy in ((1, 0), (-1, 0), (0, 1), (0, -1),
+                             (2, 0), (-2, 0), (0, 2), (0, -2)):
                 cx, cy = x + cdx, y + cdy
                 if 0 <= cx < self.width and 0 <= cy < self.height and room_mask[cy][cx] != -1:
                     return True
