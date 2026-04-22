@@ -164,6 +164,7 @@ function App() {
 
   const [gameState, setGameState] = useState('WELCOME'); // 'WELCOME', 'SELECT', 'PLAYING'
   const [selectedClass, setSelectedClass] = useState('warrior');
+  const [playerName, setPlayerName] = useState('');
 
   const [myStats, setMyStats] = useState({ hp: 0, maxHp: 10, name: "" })
   const [difficulty, setDifficulty] = useState("normal")
@@ -198,6 +199,13 @@ function App() {
   }, [depth, gameState]);
 
   const [camera, setCamera] = useState({ x: 0, y: 0 })
+  const panOffsetRef = useRef({ x: 0, y: 0 });
+  const cameraLerpRef = useRef({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const dragStartPanRef = useRef({ x: 0, y: 0 });
+  const isRefocusingRef = useRef(false);
+  const hasDraggedRef = useRef(false);
   const [assetImages, setAssetImages] = useState({
     tiles: null,
     waterFrames: [null, null, null, null, null],
@@ -293,6 +301,7 @@ function App() {
   }
 
   const handleCanvasClick = (e) => {
+    if (hasDraggedRef.current) return;
     if (!targetingMode) return;
     if (!canvasRef.current) return;
 
@@ -406,7 +415,8 @@ function App() {
     if (gameState !== 'PLAYING') return;
 
     const wsBaseUrl = getWsBaseUrl()
-    const ws = new WebSocket(`${wsBaseUrl}/ws/game/${gameId}?class_type=${selectedClass}&difficulty=${difficulty}`)
+    const nameParam = playerName ? `&name=${encodeURIComponent(playerName)}` : '';
+    const ws = new WebSocket(`${wsBaseUrl}/ws/game/${gameId}?class_type=${selectedClass}&difficulty=${difficulty}${nameParam}`)
     socketRef.current = ws
     let hasConnected = false
 
@@ -545,30 +555,25 @@ function App() {
               });
             }
             if (event.type === 'MOVE') {
-              // console.log('[App] MOVE event:', event.data, 'MyID:', myPlayerIdRef.current);
-              if (event.data.entity === myPlayerIdRef.current) {
-                // Check tile type for audio
-                const tileX = event.data.x;
-                const tileY = event.data.y;
+              const tileX = event.data.x;
+              const tileY = event.data.y;
+              const tileType = gridRef.current[tileY]?.[tileX];
+              const isDoor = tileType === 3;
 
-                if (gridRef.current[tileY] && gridRef.current[tileY][tileX]) {
-                  const tileType = gridRef.current[tileY][tileX];
-                  // console.log('[App] Calling playStep with tileType:', tileType);
+              if (event.data.entity === myPlayerIdRef.current) {
+                if (isDoor) {
+                  AudioManager.play('DOOR_OPEN');
+                } else if (tileType) {
                   AudioManager.playStep(tileType);
                 } else {
-                  console.warn('[App] Grid lookup failed for audio:', tileX, tileY);
                   AudioManager.play('MOVE');
                 }
               } else {
-                // Only play MOVE for others if we want to hear them? 
-                // Original code played MOVE for everyone at line 394 unconditionally.
-                // But wait, line 394 is OUTSIDE the player check.
-              }
-
-              // Original logic played MOVE for everyone including self.
-              // IF we want to replace the sound for self, we should probably NOT play 'MOVE' again if we played 'playStep'.
-              if (event.data.entity !== myPlayerIdRef.current) {
-                AudioManager.play(event.type);
+                if (isDoor) {
+                  AudioManager.play('DOOR_OPEN');
+                } else {
+                  AudioManager.play(event.type);
+                }
               }
             }
             if (event.type === 'RANGED_ATTACK') {
@@ -595,6 +600,9 @@ function App() {
               } else {
                 AudioManager.play('ATTACK_BOW');
               }
+            }
+            if (event.type === 'PICKUP' && event.data.player === myPlayerIdRef.current) {
+              AudioManager.play('PICKUP');
             }
           });
         }
@@ -644,6 +652,8 @@ function App() {
       }
 
       if (direction && socketRef.current?.readyState === WebSocket.OPEN) {
+        isRefocusingRef.current = true;
+        isDraggingRef.current = false;
         socketRef.current.send(JSON.stringify({ type: 'MOVE', direction }))
       }
     }
@@ -651,6 +661,73 @@ function App() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [inventory, handleToolbarClick, handleToolbarDoubleClick, socketRef, setShowInventory, triggerSearch]) // Added dependencies
+
+  useEffect(() => {
+    if (gameState !== 'PLAYING') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const onMouseDown = (e) => {
+      dragStartRef.current = { x: e.clientX, y: e.clientY };
+      dragStartPanRef.current = { ...panOffsetRef.current };
+      isDraggingRef.current = true;
+      hasDraggedRef.current = false;
+      isRefocusingRef.current = false;
+    };
+
+    const onMouseMove = (e) => {
+      if (!isDraggingRef.current) return;
+      const dx = e.clientX - dragStartRef.current.x;
+      const dy = e.clientY - dragStartRef.current.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 4) hasDraggedRef.current = true;
+      panOffsetRef.current = {
+        x: dragStartPanRef.current.x - dx,
+        y: dragStartPanRef.current.y - dy,
+      };
+    };
+
+    const onMouseUp = () => { isDraggingRef.current = false; };
+
+    const onTouchStart = (e) => {
+      const t = e.touches[0];
+      dragStartRef.current = { x: t.clientX, y: t.clientY };
+      dragStartPanRef.current = { ...panOffsetRef.current };
+      isDraggingRef.current = true;
+      hasDraggedRef.current = false;
+      isRefocusingRef.current = false;
+    };
+
+    const onTouchMove = (e) => {
+      e.preventDefault();
+      if (!isDraggingRef.current) return;
+      const t = e.touches[0];
+      const dx = t.clientX - dragStartRef.current.x;
+      const dy = t.clientY - dragStartRef.current.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 4) hasDraggedRef.current = true;
+      panOffsetRef.current = {
+        x: dragStartPanRef.current.x - dx,
+        y: dragStartPanRef.current.y - dy,
+      };
+    };
+
+    const onTouchEnd = () => { isDraggingRef.current = false; };
+
+    canvas.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    canvas.addEventListener('touchstart', onTouchStart);
+    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.addEventListener('touchend', onTouchEnd);
+
+    return () => {
+      canvas.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      canvas.removeEventListener('touchstart', onTouchStart);
+      canvas.removeEventListener('touchmove', onTouchMove);
+      canvas.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [gameState]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -855,13 +932,15 @@ function App() {
           ctx.restore();
         }
 
-        const hpBarWidth = TILE_SIZE - 4;
-        const healthBoost = player.equipped_wearable ? player.equipped_wearable.health_boost : 0;
-        const playerHpPercent = player.hp / (player.max_hp + healthBoost);
-        ctx.fillStyle = '#111';
-        ctx.fillRect(x + 2, y - 12, hpBarWidth, 4);
-        ctx.fillStyle = player.is_downed ? '#e74c3c' : (player.regen_ticks > 0 ? '#f1c40f' : '#2ecc71');
-        ctx.fillRect(x + 2, y - 12, hpBarWidth * playerHpPercent, 4);
+        if (player.id !== myPlayerId) {
+          const hpBarWidth = TILE_SIZE - 4;
+          const healthBoost = player.equipped_wearable ? player.equipped_wearable.health_boost : 0;
+          const playerHpPercent = player.hp / (player.max_hp + healthBoost);
+          ctx.fillStyle = '#111';
+          ctx.fillRect(x + 2, y - 12, hpBarWidth, 4);
+          ctx.fillStyle = player.is_downed ? '#e74c3c' : (player.regen_ticks > 0 ? '#f1c40f' : '#2ecc71');
+          ctx.fillRect(x + 2, y - 12, hpBarWidth * playerHpPercent, 4);
+        }
 
         if (player.is_downed) {
           ctx.fillStyle = '#e74c3c';
@@ -870,10 +949,12 @@ function App() {
           ctx.fillText("☠️", x + TILE_SIZE / 2, y - 25);
         }
 
-        ctx.fillStyle = 'white';
-        ctx.font = '10px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(player.name, x + TILE_SIZE / 2, y - 15);
+        if (player.id !== myPlayerId) {
+          ctx.fillStyle = 'white';
+          ctx.font = '10px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText(player.name, x + TILE_SIZE / 2, y - 15);
+        }
       });
     };
 
@@ -914,6 +995,15 @@ function App() {
       if (grid.length === 0) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      if (isRefocusingRef.current) {
+        panOffsetRef.current.x += (0 - panOffsetRef.current.x) * INTERPOLATION_SPEED;
+        panOffsetRef.current.y += (0 - panOffsetRef.current.y) * INTERPOLATION_SPEED;
+        if (Math.abs(panOffsetRef.current.x) < 0.5 && Math.abs(panOffsetRef.current.y) < 0.5) {
+          panOffsetRef.current = { x: 0, y: 0 };
+          isRefocusingRef.current = false;
+        }
+      }
+
       let cameraX = 0;
       let cameraY = 0;
       const myPlayer = entitiesRef.current.players[myPlayerIdRef.current];
@@ -923,20 +1013,33 @@ function App() {
           myPlayer.renderPos.x += (myPlayer.targetPos.x - myPlayer.renderPos.x) * INTERPOLATION_SPEED;
           myPlayer.renderPos.y += (myPlayer.targetPos.y - myPlayer.renderPos.y) * INTERPOLATION_SPEED;
         }
-        cameraX = myPlayer.renderPos.x * TILE_SIZE - canvas.width / 2 + TILE_SIZE / 2;
-        cameraY = myPlayer.renderPos.y * TILE_SIZE - canvas.height / 2 + TILE_SIZE / 2;
+        cameraX = myPlayer.renderPos.x * TILE_SIZE - canvas.width / 2 + TILE_SIZE / 2 + panOffsetRef.current.x;
+        cameraY = myPlayer.renderPos.y * TILE_SIZE - canvas.height / 2 + TILE_SIZE / 2 + panOffsetRef.current.y;
+
+        const gridCols = grid[0]?.length ?? 0;
+        const gridRows = grid.length;
+        const halfW = canvas.width / 2 - TILE_SIZE / 2;
+        const halfH = canvas.height / 2 - TILE_SIZE / 2;
+        cameraX = Math.max(-halfW, Math.min(cameraX, gridCols * TILE_SIZE - canvas.width + halfW));
+        cameraY = Math.max(-halfH, Math.min(cameraY, gridRows * TILE_SIZE - canvas.height + halfH));
+
+        panOffsetRef.current.x = cameraX - (myPlayer.renderPos.x * TILE_SIZE - canvas.width / 2 + TILE_SIZE / 2);
+        panOffsetRef.current.y = cameraY - (myPlayer.renderPos.y * TILE_SIZE - canvas.height / 2 + TILE_SIZE / 2);
+
+        if (isDraggingRef.current) {
+          cameraLerpRef.current.x = cameraX;
+          cameraLerpRef.current.y = cameraY;
+        } else {
+          cameraLerpRef.current.x += (cameraX - cameraLerpRef.current.x) * INTERPOLATION_SPEED;
+          cameraLerpRef.current.y += (cameraY - cameraLerpRef.current.y) * INTERPOLATION_SPEED;
+        }
       }
 
-      // Smoothly update camera state without causing infinite re-renders
-      // Using simple approach: only update if changed significantly or just use a ref if performance is an issue
-      // But for now, let's keep it simple. To avoid React state updates in requestAnimationFrame, 
-      // we should ideally use a ref for the camera too if it's just for the transform.
-      // However, the component expects 'camera.x' in JSX.
-      setCamera({ x: cameraX, y: cameraY });
+      setCamera({ x: cameraLerpRef.current.x, y: cameraLerpRef.current.y });
 
 
       ctx.save();
-      ctx.translate(-cameraX, -cameraY);
+      ctx.translate(-cameraLerpRef.current.x, -cameraLerpRef.current.y);
 
       const waterFrameIndex = getAnimatedWaterFrameIndex(
         performance.now(),
@@ -966,9 +1069,10 @@ function App() {
   }
 
   if (gameState === 'SELECT') {
-    return <CharacterSelection onSelect={(c, d) => {
+    return <CharacterSelection onSelect={(c, d, n) => {
       setSelectedClass(c);
       setDifficulty(d);
+      setPlayerName(n);
       setGameState('PLAYING');
     }} />;
   }

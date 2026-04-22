@@ -7,6 +7,7 @@ import hitSlashSound from '../assets/pixel-dungeon/audio/hit_slash.mp3';
 import hitBodySound from '../assets/pixel-dungeon/audio/hit.mp3';
 import healthWarnSound from '../assets/pixel-dungeon/audio/health_warn.mp3';
 import clickSound from '../assets/pixel-dungeon/audio/click.mp3';
+import itemSound from '../assets/sounds/item.mp3';
 
 class AudioManager {
     constructor() {
@@ -24,6 +25,11 @@ class AudioManager {
         this.loadSound('HIT_BODY', hitBodySound);
         this.loadSound('HEALTH_WARN', healthWarnSound);
         this.loadSound('CLICK', clickSound);
+        this.loadSound('PICKUP', itemSound);
+
+        const doorSounds = import.meta.glob('../assets/sounds/door_open.mp3', { eager: true, query: '?url' });
+        const doorUrl = doorSounds['../assets/sounds/door_open.mp3']?.default;
+        if (doorUrl) this.loadSound('DOOR_OPEN', doorUrl);
     }
 
     async loadSound(name, src) {
@@ -89,6 +95,10 @@ class AudioManager {
                 this.playTone(300, 'sine', 0.5, 0.5);
                 this.playTone(400, 'sine', 0.5, 0.5, 0.2);
                 this.playTone(500, 'sine', 0.5, 0.5, 0.4);
+                break;
+            case 'DOOR_OPEN':
+                this.playTone(300, 'triangle', 0.15, 0.2);
+                this.playTone(200, 'triangle', 0.25, 0.15, 0.1);
                 break;
             default:
                 // console.log(`Sound not found: ${soundName}`);

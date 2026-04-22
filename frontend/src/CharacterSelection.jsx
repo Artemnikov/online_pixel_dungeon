@@ -10,6 +10,7 @@ import huntressArt from './assets/pixel-dungeon/art/huntress.png';
 const CharacterSelection = ({ onSelect }) => {
   const [selectedClass, setSelectedClass] = useState('warrior');
   const [difficulty, setDifficulty] = useState('normal');
+  const [playerName, setPlayerName] = useState('');
   const audioRef = useRef(null);
   const tryPlayRef = useRef(null);
 
@@ -93,6 +94,17 @@ const CharacterSelection = ({ onSelect }) => {
           </div>
         ))}
       </div>
+      <div className="name-container">
+        <input
+          className="name-input"
+          type="text"
+          placeholder="Enter your name (optional)"
+          maxLength={20}
+          value={playerName}
+          onChange={e => setPlayerName(e.target.value)}
+        />
+      </div>
+
       <button className="start-btn" onClick={() => {
           AudioManager.play('CLICK');
           if (tryPlayRef.current) {
@@ -104,7 +116,7 @@ const CharacterSelection = ({ onSelect }) => {
             audioRef.current.currentTime = 0;
           }
           new Audio(descendSound).play().catch(() => {});
-          onSelect(selectedClass, difficulty);
+          onSelect(selectedClass, difficulty, playerName.trim());
         }}>
         Enter Dungeon
       </button>
@@ -169,6 +181,24 @@ const CharacterSelection = ({ onSelect }) => {
           border-color: #f1c40f;
           background-color: #222;
           box-shadow: 0 0 15px rgba(241, 196, 15, 0.3);
+        }
+        .name-container {
+          margin-bottom: 20px;
+        }
+        .name-input {
+          background: #222;
+          border: 1px solid #555;
+          color: white;
+          padding: 8px 16px;
+          border-radius: 4px;
+          font-family: monospace;
+          font-size: 16px;
+          text-align: center;
+          width: 260px;
+          outline: none;
+        }
+        .name-input:focus {
+          border-color: #f1c40f;
         }
         .start-btn {
           font-size: 24px;
