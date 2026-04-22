@@ -77,8 +77,21 @@ export const getSewerTerrainInstructions = (grid, x, y, tile, frameIndex = 0, op
     ];
   }
 
-  if (tile === BACKEND_TILE.DOOR.id) return [tileInstr(openDoors.has(`${x},${y}`) ? BACKEND_TILE.OPEN_DOOR : BACKEND_TILE.DOOR)];
-  if (tile === BACKEND_TILE.LOCKED_DOOR.id) return [tileInstr(BACKEND_TILE.LOCKED_DOOR)];
+  if (tile === BACKEND_TILE.DOOR.id || tile === BACKEND_TILE.LOCKED_DOOR.id) {
+    const base = tile === BACKEND_TILE.LOCKED_DOOR.id
+      ? BACKEND_TILE.LOCKED_DOOR
+      : (openDoors.has(`${x},${y}`) ? BACKEND_TILE.OPEN_DOOR : BACKEND_TILE.DOOR);
+    const instructions = [tileInstr(base)];
+    if (isWallTile(getTile(grid, x - 1, y))) {
+      instructions.push({ srcIndex: WALL_INDEX.STITCH_LEFT[0], quadrant: QUADRANT.TL, alpha: 0.85 });
+      instructions.push({ srcIndex: WALL_INDEX.STITCH_LEFT[0], quadrant: QUADRANT.BL, alpha: 0.85 });
+    }
+    if (isWallTile(getTile(grid, x + 1, y))) {
+      instructions.push({ srcIndex: WALL_INDEX.STITCH_RIGHT[0], quadrant: QUADRANT.TR, alpha: 0.85 });
+      instructions.push({ srcIndex: WALL_INDEX.STITCH_RIGHT[0], quadrant: QUADRANT.BR, alpha: 0.85 });
+    }
+    return instructions;
+  }
 
   if (tile === BACKEND_TILE.FLOOR_WATER.id) {
     const instructions = [{ srcIndex: getFloorBase(x, y), quadrant: QUADRANT.FULL }];
