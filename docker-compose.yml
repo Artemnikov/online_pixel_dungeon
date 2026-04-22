@@ -20,3 +20,4 @@ services:
       - backend
     environment:
       - VITE_API_URL=http://localhost:8080
+      - VITE_DEBUG_TILES='true'

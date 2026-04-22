@@ -36,6 +36,8 @@ from app.engine.entities.base import (
 MAX_FLOOR_ID = 50
 SEWERS_MAX_FLOOR = 4
 
+AUTO_MOVE_INTERVAL = 0.15
+
 WALKABLE_TILES = {
     TileType.FLOOR,
     TileType.DOOR,
@@ -828,6 +830,21 @@ class GameInstance:
             if player.is_downed or not player.is_alive:
                 continue
 
+            if player.path_queue:
+                now = time.time()
+                if now - player.last_auto_move_time >= AUTO_MOVE_INTERVAL:
+                    floor = self._get_or_create_floor(player.floor_id)
+                    adjacent_enemy = any(
+                        abs(m.pos.x - player.pos.x) <= 1 and abs(m.pos.y - player.pos.y) <= 1
+                        for m in floor.mobs.values() if m.is_alive
+                    )
+                    if adjacent_enemy:
+                        player.path_queue = []
+                    else:
+                        dx, dy = player.path_queue.pop(0)
+                        player.last_auto_move_time = now
+                        self.move_entity(player.id, dx, dy)
+
             if player.regen_ticks > 0:
                 player.regen_ticks -= 1
                 regen_amount = (player.get_total_max_hp() * 0.5) / 50
@@ -958,6 +975,28 @@ class GameInstance:
                 break
 
         return None
+
+    def _bfs_full_path(self, start: Position, target: Position, floor_id: int) -> List[Tuple[int, int]]:
+        floor = self._get_or_create_floor(floor_id)
+        queue = [(start.x, start.y, [])]
+        visited = {(start.x, start.y)}
+        while queue:
+            x, y, path = queue.pop(0)
+            if x == target.x and y == target.y:
+                return path
+            for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+                nx, ny = x + dx, y + dy
+                if (
+                    0 <= nx < self.width
+                    and 0 <= ny < self.height
+                    and floor.grid[ny][nx] in WALKABLE_TILES
+                    and (nx, ny) not in visited
+                ):
+                    visited.add((nx, ny))
+                    queue.append((nx, ny, path + [(dx, dy)]))
+            if len(visited) > 500:
+                break
+        return []
 
     def change_difficulty(self, new_level: str):
         if new_level in [Difficulty.EASY, Difficulty.NORMAL, Difficulty.HARD]:

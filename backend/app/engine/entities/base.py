@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Union
+from typing import Optional, List, Dict, Tuple, Union
 
 class EntityType:
     PLAYER = "player"
@@ -162,6 +162,8 @@ class Player(Entity):
     websocket_id: Optional[str] = None
     is_downed: bool = False
     regen_ticks: int = 0
+    path_queue: List[Tuple[int, int]] = []
+    last_auto_move_time: float = 0.0
 
     def take_damage(self, amount: int):
         if self.is_downed:

@@ -152,7 +152,7 @@ export const drawSewerTile = (ctx, atlasImage, waterFrames, grid, x, y, tile, wa
 
   const dx = x * DEST_TILE_SIZE;
   const dy = y * DEST_TILE_SIZE;
-  if (import.meta.env.VITE_DEBUG_TILES === 'true') {
+  if (true) {
     ctx.save();
     ctx.font = 'bold 8px monospace';
     ctx.fillStyle = 'black';

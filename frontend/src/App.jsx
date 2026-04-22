@@ -24,7 +24,9 @@ import { drawSewerTile, getAnimatedWaterFrameIndex } from './rendering/sewers/dr
 
 const TILE_SIZE = 32
 const TILE_SCALE = 2; // scale factor to draw 16x16 assets at 32x32
-const INTERPOLATION_SPEED = 0.2 // Speed of moving towards server position
+const MOVE_DURATION = 150
+const CAMERA_LERP = 0.1
+const easeOutQuad = t => 1 - (1 - t) * (1 - t)
 const PROJECTILE_SPEED = 0.5; // Tiles per frame? No, that's slow. 15px/frame?
 
 // Item Sprite Mapping (Simplified based on ItemSpriteSheet.java)
@@ -158,9 +160,11 @@ function App() {
   const [inventory, setInventory] = useState([])
   const [equippedItems, setEquippedItems] = useState({ weapon: null, wearable: null })
   const [targetingMode, setTargetingMode] = useState(false)
+  const targetingModeRef = useRef(false)
 
   const projectilesRef = useRef([])
   const lastKeyRef = useRef({ key: null, time: 0 }) // For double-tap detection
+  const holdSkipRef = useRef(false)
 
   const [gameState, setGameState] = useState('WELCOME'); // 'WELCOME', 'SELECT', 'PLAYING'
   const [selectedClass, setSelectedClass] = useState('warrior');
@@ -171,6 +175,8 @@ function App() {
   const [depth, setDepth] = useState(1)
   const visionRef = useRef({ visible: new Set(), discovered: new Set() })
   const musicRef = useRef(null)
+
+  useEffect(() => { targetingModeRef.current = targetingMode; }, [targetingMode]);
 
   useEffect(() => {
     const enableAudio = () => {
@@ -302,32 +308,34 @@ function App() {
 
   const handleCanvasClick = (e) => {
     if (hasDraggedRef.current) return;
-    if (!targetingMode) return;
     if (!canvasRef.current) return;
 
     const rect = canvasRef.current.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
 
-    // Adjust for camera
-    const worldX = clickX + camera.x;
-    const worldY = clickY + camera.y;
+    const worldX = clickX + cameraLerpRef.current.x;
+    const worldY = clickY + cameraLerpRef.current.y;
 
     const tileX = Math.floor(worldX / TILE_SIZE);
     const tileY = Math.floor(worldY / TILE_SIZE);
 
-    // Fire!
-    // Use optimistic item ID if set (string), otherwise currently equipped
-    const weaponId = typeof targetingMode === 'string' ? targetingMode : equippedItems.weapon?.id;
+    if (targetingModeRef.current) {
+      const weaponId = typeof targetingModeRef.current === 'string' ? targetingModeRef.current : equippedItems.weapon?.id;
+      if (weaponId) {
+        socketRef.current.send(JSON.stringify({
+          type: 'RANGED_ATTACK',
+          item_id: weaponId,
+          target_x: tileX,
+          target_y: tileY
+        }));
+        setTargetingMode(true);
+      }
+      return;
+    }
 
-    if (weaponId) {
-      socketRef.current.send(JSON.stringify({
-        type: 'RANGED_ATTACK',
-        item_id: weaponId,
-        target_x: tileX,
-        target_y: tileY
-      }));
-      setTargetingMode(true); // Keep targeting on (reverting to boolean)
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'MOVE_TO', x: tileX, y: tileY }));
     }
   };
 
@@ -480,7 +488,7 @@ function App() {
           }
 
           if (!entitiesRef.current.players[p.id]) {
-            entitiesRef.current.players[p.id] = { ...p, renderPos: { x: p.pos.x, y: p.pos.y }, facing: 'RIGHT' }
+            entitiesRef.current.players[p.id] = { ...p, renderPos: { x: p.pos.x, y: p.pos.y }, animStartPos: { x: p.pos.x, y: p.pos.y }, animStartTime: null, facing: 'RIGHT' }
           } else {
             const currentTarget = entitiesRef.current.players[p.id].targetPos || entitiesRef.current.players[p.id].renderPos;
             const dx = p.pos.x - currentTarget.x;
@@ -494,6 +502,8 @@ function App() {
               else if (dy < 0) entitiesRef.current.players[p.id].facing = 'UP';
             }
 
+            entitiesRef.current.players[p.id].animStartPos = { x: entitiesRef.current.players[p.id].renderPos.x, y: entitiesRef.current.players[p.id].renderPos.y }
+            entitiesRef.current.players[p.id].animStartTime = performance.now()
             entitiesRef.current.players[p.id].targetPos = p.pos
             entitiesRef.current.players[p.id].name = p.name
             entitiesRef.current.players[p.id].hp = p.hp
@@ -515,12 +525,14 @@ function App() {
 
         data.mobs.forEach(m => {
           if (!entitiesRef.current.mobs[m.id]) {
-            entitiesRef.current.mobs[m.id] = { ...m, renderPos: { x: m.pos.x, y: m.pos.y }, facing: 'RIGHT' }
+            entitiesRef.current.mobs[m.id] = { ...m, renderPos: { x: m.pos.x, y: m.pos.y }, animStartPos: { x: m.pos.x, y: m.pos.y }, animStartTime: null, facing: 'RIGHT' }
           } else {
             const currentTarget = entitiesRef.current.mobs[m.id].targetPos || entitiesRef.current.mobs[m.id].renderPos;
             if (m.pos.x > currentTarget.x) entitiesRef.current.mobs[m.id].facing = 'RIGHT';
             else if (m.pos.x < currentTarget.x) entitiesRef.current.mobs[m.id].facing = 'LEFT';
 
+            entitiesRef.current.mobs[m.id].animStartPos = { x: entitiesRef.current.mobs[m.id].renderPos.x, y: entitiesRef.current.mobs[m.id].renderPos.y }
+            entitiesRef.current.mobs[m.id].animStartTime = performance.now()
             entitiesRef.current.mobs[m.id].targetPos = m.pos
             entitiesRef.current.mobs[m.id].hp = m.hp
           }
@@ -652,6 +664,12 @@ function App() {
       }
 
       if (direction && socketRef.current?.readyState === WebSocket.OPEN) {
+        if (e.repeat) {
+          holdSkipRef.current = !holdSkipRef.current
+          if (holdSkipRef.current) return
+        } else {
+          holdSkipRef.current = false
+        }
         isRefocusingRef.current = true;
         isDraggingRef.current = false;
         socketRef.current.send(JSON.stringify({ type: 'MOVE', direction }))
@@ -710,7 +728,22 @@ function App() {
       };
     };
 
-    const onTouchEnd = () => { isDraggingRef.current = false; };
+    const onTouchEnd = (e) => {
+      isDraggingRef.current = false;
+      if (!hasDraggedRef.current && e.changedTouches.length > 0 && !targetingModeRef.current) {
+        const t = e.changedTouches[0];
+        const rect = canvas.getBoundingClientRect();
+        if (socketRef.current?.readyState === WebSocket.OPEN) {
+          const clickX = t.clientX - rect.left;
+          const clickY = t.clientY - rect.top;
+          const worldX = clickX + cameraLerpRef.current.x;
+          const worldY = clickY + cameraLerpRef.current.y;
+          const tileX = Math.floor(worldX / TILE_SIZE);
+          const tileY = Math.floor(worldY / TILE_SIZE);
+          socketRef.current.send(JSON.stringify({ type: 'MOVE_TO', x: tileX, y: tileY }));
+        }
+      }
+    };
 
     canvas.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
@@ -828,11 +861,6 @@ function App() {
       Object.values(entitiesRef.current.mobs).forEach(mob => {
         if (!visionRef.current.visible.has(`${Math.round(mob.renderPos.x)},${Math.round(mob.renderPos.y)}`)) return;
 
-        if (mob.targetPos) {
-          mob.renderPos.x += (mob.targetPos.x - mob.renderPos.x) * INTERPOLATION_SPEED;
-          mob.renderPos.y += (mob.targetPos.y - mob.renderPos.y) * INTERPOLATION_SPEED;
-        }
-
         let mobSprite = assetImages.rat;
         if (mob.name === 'Bat') {
           mobSprite = assetImages.bat;
@@ -887,11 +915,6 @@ function App() {
 
     const drawPlayers = () => {
       Object.values(entitiesRef.current.players).forEach(player => {
-        if (player.targetPos) {
-          player.renderPos.x += (player.targetPos.x - player.renderPos.x) * INTERPOLATION_SPEED;
-          player.renderPos.y += (player.targetPos.y - player.renderPos.y) * INTERPOLATION_SPEED;
-        }
-
         const isPlayerVisible = visionRef.current.visible.has(`${Math.round(player.renderPos.x)},${Math.round(player.renderPos.y)}`) || player.id === myPlayerId;
         if (!isPlayerVisible) return;
 
@@ -991,13 +1014,30 @@ function App() {
     };
 
 
+    const updateAnimations = () => {
+      const now = performance.now()
+      const allEntities = [
+        ...Object.values(entitiesRef.current.players),
+        ...Object.values(entitiesRef.current.mobs)
+      ]
+      allEntities.forEach(entity => {
+        if (entity.targetPos && entity.animStartTime != null && entity.animStartPos) {
+          const t = Math.min((now - entity.animStartTime) / MOVE_DURATION, 1.0)
+          const eased = easeOutQuad(t)
+          entity.renderPos.x = entity.animStartPos.x + (entity.targetPos.x - entity.animStartPos.x) * eased
+          entity.renderPos.y = entity.animStartPos.y + (entity.targetPos.y - entity.animStartPos.y) * eased
+        }
+      })
+    }
+
     const render = () => {
       if (grid.length === 0) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      updateAnimations();
 
       if (isRefocusingRef.current) {
-        panOffsetRef.current.x += (0 - panOffsetRef.current.x) * INTERPOLATION_SPEED;
-        panOffsetRef.current.y += (0 - panOffsetRef.current.y) * INTERPOLATION_SPEED;
+        panOffsetRef.current.x += (0 - panOffsetRef.current.x) * CAMERA_LERP;
+        panOffsetRef.current.y += (0 - panOffsetRef.current.y) * CAMERA_LERP;
         if (Math.abs(panOffsetRef.current.x) < 0.5 && Math.abs(panOffsetRef.current.y) < 0.5) {
           panOffsetRef.current = { x: 0, y: 0 };
           isRefocusingRef.current = false;
@@ -1009,10 +1049,6 @@ function App() {
       const myPlayer = entitiesRef.current.players[myPlayerIdRef.current];
 
       if (myPlayer) {
-        if (myPlayer.targetPos) {
-          myPlayer.renderPos.x += (myPlayer.targetPos.x - myPlayer.renderPos.x) * INTERPOLATION_SPEED;
-          myPlayer.renderPos.y += (myPlayer.targetPos.y - myPlayer.renderPos.y) * INTERPOLATION_SPEED;
-        }
         cameraX = myPlayer.renderPos.x * TILE_SIZE - canvas.width / 2 + TILE_SIZE / 2 + panOffsetRef.current.x;
         cameraY = myPlayer.renderPos.y * TILE_SIZE - canvas.height / 2 + TILE_SIZE / 2 + panOffsetRef.current.y;
 
@@ -1030,8 +1066,8 @@ function App() {
           cameraLerpRef.current.x = cameraX;
           cameraLerpRef.current.y = cameraY;
         } else {
-          cameraLerpRef.current.x += (cameraX - cameraLerpRef.current.x) * INTERPOLATION_SPEED;
-          cameraLerpRef.current.y += (cameraY - cameraLerpRef.current.y) * INTERPOLATION_SPEED;
+          cameraLerpRef.current.x += (cameraX - cameraLerpRef.current.x) * CAMERA_LERP;
+          cameraLerpRef.current.y += (cameraY - cameraLerpRef.current.y) * CAMERA_LERP;
         }
       }
 
