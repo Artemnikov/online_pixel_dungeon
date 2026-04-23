@@ -1,6 +1,7 @@
 import random
 import time
 import uuid
+import zlib
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
@@ -10,6 +11,7 @@ from app.engine.dungeon.generator import (
     TileType,
     TrapInfo,
 )
+from app.engine.dungeon.terrain_flags import FloorFlagMaps, build_flag_maps
 from app.engine.entities.base import (
     Boomerang,
     Bow,
@@ -38,28 +40,6 @@ SEWERS_MAX_FLOOR = 4
 
 AUTO_MOVE_INTERVAL = 0.15
 
-WALKABLE_TILES = {
-    TileType.FLOOR,
-    TileType.DOOR,
-    TileType.STAIRS_UP,
-    TileType.STAIRS_DOWN,
-    TileType.FLOOR_WOOD,
-    TileType.FLOOR_WATER,
-    TileType.FLOOR_COBBLE,
-    TileType.FLOOR_GRASS,
-    TileType.HIGH_GRASS,
-    TileType.EMPTY_DECO,
-}
-
-BLOCKS_LOS_TILES = {
-    TileType.WALL,
-    TileType.WALL_DECO,
-    TileType.LOCKED_DOOR,
-    TileType.SECRET_DOOR,
-    TileType.HIGH_GRASS,
-}
-
-
 @dataclass
 class FloorState:
     floor_id: int
@@ -73,6 +53,17 @@ class FloorState:
     traps: Dict[Tuple[int, int], TrapInfo] = field(default_factory=dict)
     key_spawns: Dict[str, Tuple[int, int]] = field(default_factory=dict)
     generation_meta: Dict[str, object] = field(default_factory=dict)
+    # Derived bool-array flag maps. Populated by build_flag_maps() after the
+    # grid is finalised. See terrain_flags.py.
+    flags: Optional[FloorFlagMaps] = None
+
+    def rebuild_flags(self) -> None:
+        """Regenerate all bool-array flag maps from the current grid.
+
+        Call after any tile-ID mutation (e.g. secret door revealed, trap
+        triggered) so downstream LOS/pathfinding stays consistent.
+        """
+        self.flags = build_flag_maps(self.grid)
 
 
 class GameInstance:
@@ -191,8 +182,11 @@ class GameInstance:
         self.depth = depth
 
         # Deterministic per-(game_id, depth) seed so reconnects/reloads see the
-        # same layout. Mirrors SPD's Dungeon.seedCurDepth().
-        floor_seed = hash((self.game_id, depth)) & 0xFFFFFFFF
+        # same layout. Mirrors SPD's Dungeon.seedCurDepth(). Using CRC32
+        # instead of Python's built-in hash() because hash() is randomised
+        # per-process (PYTHONHASHSEED) — cross-process stability matters for
+        # server restarts during a live game session.
+        floor_seed = zlib.crc32(f"{self.game_id}:{depth}".encode("utf-8"))
         generator = DungeonGenerator(self.width, self.height, seed=floor_seed)
         floor: FloorState
         if depth <= SEWERS_MAX_FLOOR:
@@ -238,6 +232,7 @@ class GameInstance:
                 region="legacy",
             )
 
+        floor.rebuild_flags()
         self.floors[depth] = floor
         self._spawn_content(floor)
         return floor
@@ -722,7 +717,7 @@ class GameInstance:
                 return
             tile = floor.grid[new_y][new_x]
 
-        if tile not in WALKABLE_TILES:
+        if not floor.flags or not floor.flags.passable[new_y][new_x]:
             return
 
         if not isinstance(entity, Player) and self._is_in_safe_room(floor, new_x, new_y):
@@ -1010,7 +1005,7 @@ class GameInstance:
 
             if 0 <= curr_x < self.width and 0 <= curr_y < self.height:
                 tile = floor.grid[curr_y][curr_x]
-                if tile in BLOCKS_LOS_TILES:
+                if floor.flags and floor.flags.los_blocking[curr_y][curr_x]:
                     return False
                 if tile == TileType.DOOR and not self._is_door_open(floor, curr_x, curr_y):
                     return False
@@ -1042,7 +1037,8 @@ class GameInstance:
                 if (
                     0 <= nx < self.width
                     and 0 <= ny < self.height
-                    and floor.grid[ny][nx] in WALKABLE_TILES
+                    and floor.flags
+                    and floor.flags.passable[ny][nx]
                     and (nx, ny) not in visited
                 ):
                     blocked = False
@@ -1073,7 +1069,8 @@ class GameInstance:
                 if (
                     0 <= nx < self.width
                     and 0 <= ny < self.height
-                    and floor.grid[ny][nx] in WALKABLE_TILES
+                    and floor.flags
+                    and floor.flags.passable[ny][nx]
                     and (nx, ny) not in visited
                 ):
                     visited.add((nx, ny))
