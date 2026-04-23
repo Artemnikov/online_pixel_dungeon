@@ -11,11 +11,16 @@ from app.engine.dungeon.terrain import TerrainMixin
 
 
 class DungeonGenerator(SewersGenerationMixin, CorridorsMixin, TerrainMixin):
-    def __init__(self, width: int, height: int):
+    def __init__(self, width: int, height: int, seed: Optional[int] = None):
         self.width = width
         self.height = height
         self.grid = [[TileType.VOID for _ in range(width)] for _ in range(height)]
         self.rooms: List[Room] = []
+        # Per-instance RNG — SPD equivalent of Random.pushGenerator(Dungeon.seedCurDepth()).
+        # When seed is None, falls back to a random seed so generation stays varied
+        # in contexts that don't thread seeds yet.
+        self.seed = seed if seed is not None else random.Random().getrandbits(32)
+        self.rng = random.Random(self.seed)
 
     def generate(
         self, max_rooms: int, min_room_size: int, max_room_size: int
@@ -28,10 +33,10 @@ class DungeonGenerator(SewersGenerationMixin, CorridorsMixin, TerrainMixin):
             self.rooms = []
 
             for _ in range(max_rooms):
-                w = random.randint(min_room_size, max_room_size)
-                h = random.randint(min_room_size, max_room_size)
-                x = random.randint(1, self.width - w - 1)
-                y = random.randint(1, self.height - h - 1)
+                w = self.rng.randint(min_room_size, max_room_size)
+                h = self.rng.randint(min_room_size, max_room_size)
+                x = self.rng.randint(1, self.width - w - 1)
+                y = self.rng.randint(1, self.height - h - 1)
 
                 new_room = Room(x, y, w, h)
 
@@ -56,7 +61,6 @@ class DungeonGenerator(SewersGenerationMixin, CorridorsMixin, TerrainMixin):
             self.grid[up_y][up_x] = TileType.STAIRS_UP
             self.grid[down_y][down_x] = TileType.STAIRS_DOWN
 
-        self._classify_walls()
         return self.grid, self.rooms
 
     def generate_boss_floor(self) -> Tuple[List[List[int]], List[Room]]:
@@ -84,7 +88,6 @@ class DungeonGenerator(SewersGenerationMixin, CorridorsMixin, TerrainMixin):
         self.grid[ey][ex] = TileType.STAIRS_DOWN
 
         self.rooms = [west_room, boss_room, north_room, south_room, east_room]
-        self._classify_walls()
         self._save_debug_map(self.grid)
         return self.grid, self.rooms
 
@@ -114,10 +117,6 @@ class DungeonGenerator(SewersGenerationMixin, CorridorsMixin, TerrainMixin):
             TileType.FLOOR_COBBLE:':',
             TileType.FLOOR_GRASS: '"',
             TileType.LOCKED_DOOR: 'X',
-            TileType.WALL_TOP:    '^',
-            TileType.WALL_LEFT:   '<',
-            TileType.WALL_RIGHT:  '>',
-            TileType.WALL_BOTTOM: 'v',
             TileType.WALL_DECO:   'W',
             TileType.EMPTY_DECO:  'e',
             TileType.HIGH_GRASS:  'G',
@@ -125,9 +124,8 @@ class DungeonGenerator(SewersGenerationMixin, CorridorsMixin, TerrainMixin):
         }
         lines = [''.join(_CHARS.get(tile, '?') for tile in row) for row in grid]
         legend = (
-            "Legend: ' '=VOID  #=WALL  .=FLOOR  +=DOOR  X=LOCKED_DOOR\n"
-            "        U=STAIRS_UP  D=STAIRS_DOWN  ,=FLOOR_WOOD  ~=WATER\n"
-            "        :=COBBLE  \"=GRASS  ^=WALL_TOP  v=WALL_BOTTOM  <=WALL_LEFT  >=WALL_RIGHT\n"
+            "Legend: ' '=VOID  #=WALL  W=WALL_DECO  S=SECRET_DOOR  .=FLOOR  +=DOOR  X=LOCKED_DOOR\n"
+            "        U=STAIRS_UP  D=STAIRS_DOWN  ,=FLOOR_WOOD  ~=WATER  :=COBBLE  \"=GRASS  G=HIGH_GRASS  e=EMPTY_DECO\n"
         )
         out = Path(__file__).parents[3] / "debug_map.txt"
         try:

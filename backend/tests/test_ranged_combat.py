@@ -80,7 +80,7 @@ def test_ranged_combat_los_blocked():
     bow = player.equipped_weapon
     
     # Place a wall between player and mob
-    game.grid[6][5] = TileType.WALL_TOP
+    game.grid[6][5] = TileType.WALL
     
     mob_id = "hidden-mob"
     from app.engine.entities.base import Mob as MobEntity

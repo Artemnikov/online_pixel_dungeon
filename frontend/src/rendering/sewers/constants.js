@@ -14,6 +14,7 @@ export const atlasIndex = (x, y) => y * ATLAS_COLUMNS + x;
 
 export const BACKEND_TILE = {
   VOID: { id: 0, atlasIndex: null, seethrough: true },
+  WALL: { id: 1, atlasIndex: atlasIndex(0, 5), seethrough: false },
   FLOOR: { id: 2, atlasIndex: null, seethrough: true },
   DOOR: { id: 3, atlasIndex: atlasIndex(8, 3), seethrough: false },
   OPEN_DOOR: { id: 3, atlasIndex: atlasIndex(9, 3), seethrough: true },
@@ -21,15 +22,9 @@ export const BACKEND_TILE = {
   STAIRS_DOWN: { id: 5, atlasIndex: atlasIndex(1, 1), seethrough: true },
   FLOOR_WOOD: { id: 6, atlasIndex: atlasIndex(4, 0), seethrough: true },
   FLOOR_WATER: { id: 7, atlasIndex: null, seethrough: true },
-  FLOOR_COBBLE: { id: 8, atlasIndex: atlasIndex(1, 1), seethrough: true },
+  FLOOR_COBBLE: { id: 8, atlasIndex: atlasIndex(12, 0), seethrough: true },
   FLOOR_GRASS: { id: 9, atlasIndex: null, seethrough: true },
   LOCKED_DOOR: { id: 10, atlasIndex: atlasIndex(8, 3), seethrough: false },
-  WALL_TOP: { id: 11, atlasIndex: atlasIndex(0, 5), seethrough: false },
-  WALL_LEFT: { id: 12, atlasIndex: atlasIndex(3, 9), seethrough: false },
-  WALL_RIGHT: { id: 13, atlasIndex: atlasIndex(4, 9), seethrough: false },
-  WALL_BOTTOM: { id: 14, atlasIndex: atlasIndex(0, 12), rotate: 180, srcOffset: { y: -3 }, seethrough: false },
-  WALL_BOTTOM_LEFT: { id: 15, atlasIndex: atlasIndex(3, 9), crop: { top: 0.3 }, seethrough: false },
-  WALL_BOTTOM_RIGHT: { id: 16, atlasIndex: atlasIndex(4, 9), crop: { top: 0.3 }, seethrough: false },
   WALL_DECO: { id: 17, atlasIndex: atlasIndex(1, 3), seethrough: false },
   EMPTY_DECO: { id: 18, atlasIndex: atlasIndex(3, 0), seethrough: true },
   HIGH_GRASS: { id: 19, atlasIndex: null, seethrough: false },
@@ -108,12 +103,7 @@ export const QUADRANT_NEIGHBORS = {
 };
 
 export const isWallTile = (tile) =>
-  tile === BACKEND_TILE.WALL_TOP.id ||
-  tile === BACKEND_TILE.WALL_LEFT.id ||
-  tile === BACKEND_TILE.WALL_RIGHT.id ||
-  tile === BACKEND_TILE.WALL_BOTTOM.id ||
-  tile === BACKEND_TILE.WALL_BOTTOM_LEFT.id ||
-  tile === BACKEND_TILE.WALL_BOTTOM_RIGHT.id ||
+  tile === BACKEND_TILE.WALL.id ||
   tile === BACKEND_TILE.WALL_DECO.id ||
   tile === BACKEND_TILE.SECRET_DOOR.id;
 export const isWaterTile = (tile) => tile === BACKEND_TILE.FLOOR_WATER.id;

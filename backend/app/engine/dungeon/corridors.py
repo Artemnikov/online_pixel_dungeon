@@ -27,7 +27,7 @@ class CorridorsMixin:
                     continue
                 if 0 <= x < self.width and 0 <= y < self.height:
                     if self.grid[y][x] == TileType.VOID:
-                        self.grid[y][x] = TileType.WALL_TOP if y == room.y - 1 else TileType.WALL
+                        self.grid[y][x] = TileType.WALL
 
     def _build_room_mask(self, rooms: List[Room]) -> List[List[int]]:
         mask = [[-1 for _ in range(self.width)] for _ in range(self.height)]
@@ -56,11 +56,11 @@ class CorridorsMixin:
                 wall_xa = room_a.x + room_a.width
                 cands_ya = [y for y in range(room_a.y + 1, room_a.y + room_a.height - 1)
                             if not any(abs(y - dy) <= 1 for (dx, dy) in used if dx == wall_xa)]
-                ya = random.choice(cands_ya) if cands_ya else random.randint(room_a.y + 1, room_a.y + room_a.height - 2)
+                ya = self.rng.choice(cands_ya) if cands_ya else self.rng.randint(room_a.y + 1, room_a.y + room_a.height - 2)
                 wall_xb = room_b.x - 1
                 cands_yb = [y for y in range(room_b.y + 1, room_b.y + room_b.height - 1)
                             if not any(abs(y - dy) <= 1 for (dx, dy) in used if dx == wall_xb)]
-                yb = random.choice(cands_yb) if cands_yb else random.randint(room_b.y + 1, room_b.y + room_b.height - 2)
+                yb = self.rng.choice(cands_yb) if cands_yb else self.rng.randint(room_b.y + 1, room_b.y + room_b.height - 2)
                 door_a = (wall_xa, ya)
                 outside_a = (door_a[0] + 1, ya)
                 door_b = (wall_xb, yb)
@@ -69,11 +69,11 @@ class CorridorsMixin:
                 wall_xa = room_a.x - 1
                 cands_ya = [y for y in range(room_a.y + 1, room_a.y + room_a.height - 1)
                             if not any(abs(y - dy) <= 1 for (dx, dy) in used if dx == wall_xa)]
-                ya = random.choice(cands_ya) if cands_ya else random.randint(room_a.y + 1, room_a.y + room_a.height - 2)
+                ya = self.rng.choice(cands_ya) if cands_ya else self.rng.randint(room_a.y + 1, room_a.y + room_a.height - 2)
                 wall_xb = room_b.x + room_b.width
                 cands_yb = [y for y in range(room_b.y + 1, room_b.y + room_b.height - 1)
                             if not any(abs(y - dy) <= 1 for (dx, dy) in used if dx == wall_xb)]
-                yb = random.choice(cands_yb) if cands_yb else random.randint(room_b.y + 1, room_b.y + room_b.height - 2)
+                yb = self.rng.choice(cands_yb) if cands_yb else self.rng.randint(room_b.y + 1, room_b.y + room_b.height - 2)
                 door_a = (wall_xa, ya)
                 outside_a = (door_a[0] - 1, ya)
                 door_b = (wall_xb, yb)
@@ -83,11 +83,11 @@ class CorridorsMixin:
                 wall_ya = room_a.y + room_a.height
                 cands_xa = [x for x in range(room_a.x + 1, room_a.x + room_a.width - 1)
                             if not any(abs(x - dx) <= 1 for (dx, dy) in used if dy == wall_ya)]
-                xa = random.choice(cands_xa) if cands_xa else random.randint(room_a.x + 1, room_a.x + room_a.width - 2)
+                xa = self.rng.choice(cands_xa) if cands_xa else self.rng.randint(room_a.x + 1, room_a.x + room_a.width - 2)
                 wall_yb = room_b.y - 1
                 cands_xb = [x for x in range(room_b.x + 1, room_b.x + room_b.width - 1)
                             if not any(abs(x - dx) <= 1 for (dx, dy) in used if dy == wall_yb)]
-                xb = random.choice(cands_xb) if cands_xb else random.randint(room_b.x + 1, room_b.x + room_b.width - 2)
+                xb = self.rng.choice(cands_xb) if cands_xb else self.rng.randint(room_b.x + 1, room_b.x + room_b.width - 2)
                 door_a = (xa, wall_ya)
                 outside_a = (xa, door_a[1] + 1)
                 door_b = (xb, wall_yb)
@@ -96,11 +96,11 @@ class CorridorsMixin:
                 wall_ya = room_a.y - 1
                 cands_xa = [x for x in range(room_a.x + 1, room_a.x + room_a.width - 1)
                             if not any(abs(x - dx) <= 1 for (dx, dy) in used if dy == wall_ya)]
-                xa = random.choice(cands_xa) if cands_xa else random.randint(room_a.x + 1, room_a.x + room_a.width - 2)
+                xa = self.rng.choice(cands_xa) if cands_xa else self.rng.randint(room_a.x + 1, room_a.x + room_a.width - 2)
                 wall_yb = room_b.y + room_b.height
                 cands_xb = [x for x in range(room_b.x + 1, room_b.x + room_b.width - 1)
                             if not any(abs(x - dx) <= 1 for (dx, dy) in used if dy == wall_yb)]
-                xb = random.choice(cands_xb) if cands_xb else random.randint(room_b.x + 1, room_b.x + room_b.width - 2)
+                xb = self.rng.choice(cands_xb) if cands_xb else self.rng.randint(room_b.x + 1, room_b.x + room_b.width - 2)
                 door_a = (xa, wall_ya)
                 outside_a = (xa, door_a[1] - 1)
                 door_b = (xb, wall_yb)
@@ -160,8 +160,8 @@ class CorridorsMixin:
     ) -> Optional[Room]:
         ax, ay = anchor
         for _ in range(120):
-            jitter_x = random.randint(-4, 4)
-            jitter_y = random.randint(-4, 4)
+            jitter_x = self.rng.randint(-4, 4)
+            jitter_y = self.rng.randint(-4, 4)
             x = ax - width // 2 + jitter_x
             y = ay - height // 2 + jitter_y
 
@@ -187,8 +187,8 @@ class CorridorsMixin:
         max_radius = max(self.width, self.height) // 2
 
         for _ in range(180):
-            angle = random.random() * 2 * math.pi
-            radius = random.randint(7, max_radius)
+            angle = self.rng.random() * 2 * math.pi
+            radius = self.rng.randint(7, max_radius)
             ax = int(host_cx + math.cos(angle) * radius)
             ay = int(host_cy + math.sin(angle) * radius)
             room = self._place_room_near_anchor((ax, ay), width, height, existing_rooms, padding)
@@ -200,17 +200,7 @@ class CorridorsMixin:
     def _create_room(self, room: Room):
         for y in range(room.y, room.y + room.height):
             for x in range(room.x, room.x + room.width):
-                floor_type = random.choice(
-                    [
-                        TileType.FLOOR,
-                        TileType.FLOOR,
-                        TileType.FLOOR,
-                        TileType.FLOOR_WOOD,
-                        TileType.FLOOR_WATER,
-                        TileType.FLOOR_COBBLE,
-                    ]
-                )
-                self.grid[y][x] = floor_type
+                self.grid[y][x] = TileType.FLOOR
 
         corners = {
             (room.x - 1, room.y - 1),
@@ -223,13 +213,13 @@ class CorridorsMixin:
                 if (x, y) in corners:
                     continue
                 if 0 <= x < self.width and 0 <= y < self.height and self.grid[y][x] == TileType.VOID:
-                    self.grid[y][x] = TileType.WALL_TOP if y == room.y - 1 else TileType.WALL
+                    self.grid[y][x] = TileType.WALL
 
     def _create_tunnel(self, start: Tuple[int, int], end: Tuple[int, int]):
         x1, y1 = start
         x2, y2 = end
 
-        if random.random() < 0.5:
+        if self.rng.random() < 0.5:
             self._h_tunnel(x1, x2, y1)
             self._v_tunnel(y1, y2, x2)
         else:
@@ -240,7 +230,7 @@ class CorridorsMixin:
         for x in range(min(x1, x2), max(x1, x2) + 1):
             if self.grid[y][x] == TileType.VOID:
                 self.grid[y][x] = TileType.FLOOR
-            elif self.grid[y][x] in (TileType.WALL, TileType.WALL_TOP):
+            elif self.grid[y][x] == TileType.WALL:
                 self.grid[y][x] = TileType.DOOR
 
             if y > 0 and self.grid[y - 1][x] == TileType.VOID:
@@ -252,7 +242,7 @@ class CorridorsMixin:
         for y in range(min(y1, y2), max(y1, y2) + 1):
             if self.grid[y][x] == TileType.VOID:
                 self.grid[y][x] = TileType.FLOOR
-            elif self.grid[y][x] in (TileType.WALL, TileType.WALL_TOP):
+            elif self.grid[y][x] == TileType.WALL:
                 self.grid[y][x] = TileType.DOOR
 
             if x > 0 and self.grid[y][x - 1] == TileType.VOID:
@@ -278,89 +268,5 @@ class CorridorsMixin:
                     continue
                 if not (self._in_bounds(nx, ny) and self.grid[ny][nx] == TileType.VOID):
                     continue
-                if dy < 0:
-                    self.grid[ny][nx] = TileType.WALL_LEFT if dx < 0 else TileType.WALL_RIGHT
-                else:
-                    self.grid[ny][nx] = TileType.WALL_BOTTOM_LEFT if dx < 0 else TileType.WALL_BOTTOM_RIGHT
+                self.grid[ny][nx] = TileType.WALL
 
-    def _classify_walls(self) -> None:
-        walkable = {
-            TileType.FLOOR, TileType.DOOR, TileType.STAIRS_UP,
-            TileType.STAIRS_DOWN, TileType.FLOOR_WOOD, TileType.FLOOR_WATER,
-            TileType.FLOOR_COBBLE, TileType.FLOOR_GRASS, TileType.LOCKED_DOOR,
-            TileType.HIGH_GRASS, TileType.EMPTY_DECO,
-        }
-        # First pass: classify room wall rings by geometry — authoritative and
-        # immune to corridor-adjacency ambiguity.
-        room_classified: set = set()
-        for room in self.rooms:
-            top_y    = room.y - 1
-            bottom_y = room.y + room.height
-            left_x   = room.x - 1
-            right_x  = room.x + room.width
-            # Top row (face south toward room floor)
-            if 0 <= top_y < self.height:
-                for x in range(room.x - 1, room.x + room.width + 1):
-                    if 0 <= x < self.width and self.grid[top_y][x] in (TileType.WALL, TileType.WALL_TOP):
-                        self.grid[top_y][x] = TileType.WALL_TOP
-                        room_classified.add((x, top_y))
-            # Bottom row (face north toward room floor)
-            if 0 <= bottom_y < self.height:
-                for x in range(room.x - 1, room.x + room.width + 1):
-                    if 0 <= x < self.width and self.grid[bottom_y][x] == TileType.WALL:
-                        self.grid[bottom_y][x] = TileType.WALL_BOTTOM
-                        room_classified.add((x, bottom_y))
-            # Left column (face east toward room floor)
-            if 0 <= left_x < self.width:
-                for y in range(room.y, room.y + room.height):
-                    if 0 <= y < self.height and self.grid[y][left_x] == TileType.WALL:
-                        self.grid[y][left_x] = TileType.WALL_LEFT
-                        room_classified.add((left_x, y))
-            # Right column (face west toward room floor)
-            if 0 <= right_x < self.width:
-                for y in range(room.y, room.y + room.height):
-                    if 0 <= y < self.height and self.grid[y][right_x] == TileType.WALL:
-                        self.grid[y][right_x] = TileType.WALL_RIGHT
-                        room_classified.add((right_x, y))
-        # Second pass: classify corridor walls that were not part of any room
-        # wall ring, using neighbor-based heuristic.
-        for y in range(self.height):
-            for x in range(self.width):
-                if (x, y) in room_classified or self.grid[y][x] != TileType.WALL:
-                    continue
-                south = y + 1 < self.height and self.grid[y + 1][x] in walkable
-                north = y - 1 >= 0          and self.grid[y - 1][x] in walkable
-                east  = x + 1 < self.width  and self.grid[y][x + 1] in walkable
-                west  = x - 1 >= 0          and self.grid[y][x - 1] in walkable
-                if east:
-                    self.grid[y][x] = TileType.WALL_LEFT
-                elif west:
-                    self.grid[y][x] = TileType.WALL_RIGHT
-                elif south:
-                    self.grid[y][x] = TileType.WALL_TOP
-                elif north:
-                    self.grid[y][x] = TileType.WALL_BOTTOM
-        # Promote start-of-line: a WALL_LEFT whose east is WALL_TOP is the
-        # westernmost tile of a horizontal cap run (typically produced at a
-        # corridor direction change). Render it as part of the cap line.
-        for y in range(self.height):
-            for x in range(self.width):
-                if self.grid[y][x] != TileType.WALL_LEFT:
-                    continue
-                if x + 1 < self.width and self.grid[y][x + 1] == TileType.WALL_TOP:
-                    self.grid[y][x] = TileType.WALL_TOP
-        # Final pass: fix room corners — top corners extend side walls, bottom corners cleared.
-        for room in self.rooms:
-            for cx, cy, tile in (
-                (room.x - 1,          room.y - 1,          TileType.WALL_LEFT),
-                (room.x + room.width,  room.y - 1,          TileType.WALL_RIGHT),
-                (room.x - 1,          room.y + room.height, TileType.WALL_BOTTOM_LEFT),
-                (room.x + room.width,  room.y + room.height, TileType.WALL_BOTTOM_RIGHT),
-            ):
-                if 0 <= cx < self.width and 0 <= cy < self.height:
-                    self.grid[cy][cx] = tile
-        # Mop-up: interior walls fully enclosed by other walls get WALL_TOP as default
-        for y in range(self.height):
-            for x in range(self.width):
-                if self.grid[y][x] == TileType.WALL:
-                    self.grid[y][x] = TileType.WALL_TOP

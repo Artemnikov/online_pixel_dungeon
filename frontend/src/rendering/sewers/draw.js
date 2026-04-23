@@ -167,8 +167,9 @@ export const drawWaterBackground = (ctx, waterTex, clipPath, bounds, nowMs) => {
 };
 
 export const drawSewerTile = (ctx, atlasImage, grid, x, y, tile, openDoors = new Set()) => {
-  const useWallMapper = tile === BACKEND_TILE.WALL_TOP.id
-    || tile === BACKEND_TILE.WALL_DECO.id;
+  const useWallMapper = tile === BACKEND_TILE.WALL.id
+    || tile === BACKEND_TILE.WALL_DECO.id
+    || tile === BACKEND_TILE.SECRET_DOOR.id;
   const instructions = useWallMapper
     ? getSewerWallInstructions(grid, x, y)
     : getSewerTerrainInstructions(grid, x, y, tile, openDoors);

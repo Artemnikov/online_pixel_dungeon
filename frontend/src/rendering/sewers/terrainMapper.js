@@ -40,15 +40,6 @@ const tileInstr = (asset) => ({
   ...(asset.crop      != null && { crop:      asset.crop }),
 });
 
-// Crops to cap+face rows only; skips WALL_BOTTOM's black shadow that would
-// otherwise leak onto the wall tile below the door.
-const topCapBelowDoor = () => ({
-  srcIndex: BACKEND_TILE.WALL_BOTTOM.atlasIndex,
-  quadrant: QUADRANT.FULL,
-  srcOffset: { y: 8 },
-  crop: { top: 5 / 16 },
-});
-
 const getTerrainQuadrants = (grid, x, y, matcher, centerVariants, edgeByQuadrant, salt) => {
   const center = pickVariant(centerVariants, x, y, salt);
   const out = [];
@@ -128,86 +119,6 @@ export const getSewerTerrainInstructions = (grid, x, y, tile, openDoors = new Se
       )
     );
     return instructions;
-  }
-
-  if (tile === BACKEND_TILE.WALL_BOTTOM.id) {
-    const instructions = [tileInstr(BACKEND_TILE.WALL_BOTTOM)];
-    const west = getTile(grid, x - 1, y);
-    const east = getTile(grid, x + 1, y);
-    if (!isWallTile(west) && west !== BACKEND_TILE.VOID.id) {
-      instructions.push({ srcIndex: WALL_INDEX.STITCH_LEFT[0], quadrant: QUADRANT.TL, alpha: 0.85 });
-      instructions.push({ srcIndex: WALL_INDEX.STITCH_LEFT[0], quadrant: QUADRANT.BL, alpha: 0.85 });
-    }
-    if (!isWallTile(east) && east !== BACKEND_TILE.VOID.id) {
-      instructions.push({ srcIndex: WALL_INDEX.STITCH_RIGHT[0], quadrant: QUADRANT.TR, alpha: 0.85 });
-      instructions.push({ srcIndex: WALL_INDEX.STITCH_RIGHT[0], quadrant: QUADRANT.BR, alpha: 0.85 });
-    }
-    return instructions;
-  }
-  if (tile === BACKEND_TILE.WALL_LEFT.id) {
-    const north = getTile(grid, x, y - 1);
-    const south = getTile(grid, x, y + 1);
-    const isDoor = (t) => t === BACKEND_TILE.DOOR.id || t === BACKEND_TILE.LOCKED_DOOR.id;
-    const isWalkable = (t) => t !== BACKEND_TILE.VOID.id && t !== undefined && !isWallTile(t);
-    if (isDoor(south)) return [tileInstr(BACKEND_TILE.WALL_TOP), tileInstr(BACKEND_TILE.WALL_LEFT)];
-    if (isDoor(north)) return [
-      tileInstr(BACKEND_TILE.WALL_TOP),
-      tileInstr(BACKEND_TILE.WALL_LEFT),
-      topCapBelowDoor(),
-    ];
-    const variant = hashCell(x, y) % WALL_INDEX.TOP.length;
-    const instructions = [
-      { srcIndex: WALL_INDEX.TOP[variant], quadrant: QUADRANT.FULL },
-      { srcIndex: WALL_INDEX.FACE_SOLID[variant], quadrant: QUADRANT.FULL },
-      tileInstr(BACKEND_TILE.WALL_LEFT),
-    ];
-    if (isWalkable(north)) instructions.push(topCapBelowDoor());
-    return instructions;
-  }
-  if (tile === BACKEND_TILE.WALL_RIGHT.id) {
-    const north = getTile(grid, x, y - 1);
-    const south = getTile(grid, x, y + 1);
-    const isDoor = (t) => t === BACKEND_TILE.DOOR.id || t === BACKEND_TILE.LOCKED_DOOR.id;
-    const isWalkable = (t) => t !== BACKEND_TILE.VOID.id && t !== undefined && !isWallTile(t);
-    if (isDoor(south)) return [tileInstr(BACKEND_TILE.WALL_LEFT), tileInstr(BACKEND_TILE.WALL_TOP)];
-    if (isDoor(north)) return [
-      tileInstr(BACKEND_TILE.WALL_TOP),
-      { ...tileInstr(BACKEND_TILE.WALL_LEFT), flipX: true },
-      topCapBelowDoor(),
-    ];
-    const instructions = [
-      { srcIndex: BACKEND_TILE.WALL_TOP.atlasIndex, quadrant: QUADRANT.FULL },
-      tileInstr(BACKEND_TILE.WALL_RIGHT),
-    ];
-    if (isWalkable(north)) instructions.push(topCapBelowDoor());
-    return instructions;
-  }
-  if (tile === BACKEND_TILE.WALL_BOTTOM_LEFT.id) return [tileInstr(BACKEND_TILE.WALL_LEFT)];
-  if (tile === BACKEND_TILE.WALL_BOTTOM_RIGHT.id) return [
-    { srcIndex: BACKEND_TILE.WALL_TOP.atlasIndex, quadrant: QUADRANT.FULL },
-    tileInstr(BACKEND_TILE.WALL_RIGHT),
-  ];
-
-  if (tile === BACKEND_TILE.WALL_DECO.id) {
-    const variant = pickVariant(WALL_INDEX.DECO, x, y);
-    return [{ srcIndex: variant, quadrant: QUADRANT.FULL }];
-  }
-
-  if (tile === BACKEND_TILE.SECRET_DOOR.id) {
-    const isWalkable = (t) =>
-      t !== BACKEND_TILE.VOID.id && t !== undefined && !isWallTile(t) && t !== BACKEND_TILE.SECRET_DOOR.id;
-    const south = getTile(grid, x, y + 1);
-    const north = getTile(grid, x, y - 1);
-    const east = getTile(grid, x + 1, y);
-    const west = getTile(grid, x - 1, y);
-    if (isWalkable(south)) return [tileInstr(BACKEND_TILE.WALL_TOP)];
-    if (isWalkable(north)) return [tileInstr(BACKEND_TILE.WALL_BOTTOM)];
-    if (isWalkable(east)) return [tileInstr(BACKEND_TILE.WALL_LEFT)];
-    if (isWalkable(west)) return [
-      { srcIndex: BACKEND_TILE.WALL_TOP.atlasIndex, quadrant: QUADRANT.FULL },
-      tileInstr(BACKEND_TILE.WALL_RIGHT),
-    ];
-    return [tileInstr(BACKEND_TILE.WALL_TOP)];
   }
 
   if (tile === BACKEND_TILE.EMPTY_DECO.id) {

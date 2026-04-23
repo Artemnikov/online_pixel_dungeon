@@ -4,34 +4,34 @@ import assert from 'node:assert/strict';
 import { getSewerTerrainInstructions } from './terrainMapper.js';
 import { BACKEND_TILE, QUADRANT, TERRAIN_INDEX, WALL_INDEX, isGrassTile, isWallTile } from './constants.js';
 
-const gridWith = (tile, width = 3, height = 3) =>
-  Array.from({ length: height }, () => Array.from({ length: width }, () => tile));
+const gridOfIds = (tileId, width = 3, height = 3) =>
+  Array.from({ length: height }, () => Array.from({ length: width }, () => tileId));
 
 test('maps base terrain IDs to non-empty instruction sets', () => {
-  const grid = gridWith(BACKEND_TILE.FLOOR);
+  const grid = gridOfIds(BACKEND_TILE.FLOOR.id);
 
-  const mappedTiles = [
-    BACKEND_TILE.FLOOR,
-    BACKEND_TILE.FLOOR_WATER,
-    BACKEND_TILE.FLOOR_COBBLE,
-    BACKEND_TILE.FLOOR_GRASS,
-    BACKEND_TILE.DOOR,
-    BACKEND_TILE.LOCKED_DOOR,
-    BACKEND_TILE.STAIRS_UP,
-    BACKEND_TILE.STAIRS_DOWN,
+  const mappedIds = [
+    BACKEND_TILE.FLOOR.id,
+    BACKEND_TILE.FLOOR_WATER.id,
+    BACKEND_TILE.FLOOR_COBBLE.id,
+    BACKEND_TILE.FLOOR_GRASS.id,
+    BACKEND_TILE.DOOR.id,
+    BACKEND_TILE.LOCKED_DOOR.id,
+    BACKEND_TILE.STAIRS_UP.id,
+    BACKEND_TILE.STAIRS_DOWN.id,
   ];
 
-  for (const tile of mappedTiles) {
-    const instructions = getSewerTerrainInstructions(grid, 1, 1, tile, 2);
-    assert.ok(instructions.length > 0, `tile ${tile} should render`);
+  for (const tileId of mappedIds) {
+    const instructions = getSewerTerrainInstructions(grid, 1, 1, tileId);
+    assert.ok(instructions.length > 0, `tile id ${tileId} should render`);
   }
 });
 
 test('water mapping produces quadrant composition and shoreline on isolated water', () => {
-  const grid = gridWith(BACKEND_TILE.FLOOR);
-  grid[1][1] = BACKEND_TILE.FLOOR_WATER;
+  const grid = gridOfIds(BACKEND_TILE.FLOOR.id);
+  grid[1][1] = BACKEND_TILE.FLOOR_WATER.id;
 
-  const instructions = getSewerTerrainInstructions(grid, 1, 1, BACKEND_TILE.FLOOR_WATER, 1);
+  const instructions = getSewerTerrainInstructions(grid, 1, 1, BACKEND_TILE.FLOOR_WATER.id);
   const quadrantInstructions = instructions.filter((item) => item.quadrant !== QUADRANT.FULL);
 
   assert.equal(quadrantInstructions.length, 4);
@@ -42,8 +42,8 @@ test('water mapping produces quadrant composition and shoreline on isolated wate
 });
 
 test('grass center uses center tiles when surrounded by grass', () => {
-  const grid = gridWith(BACKEND_TILE.FLOOR_GRASS, 5, 5);
-  const instructions = getSewerTerrainInstructions(grid, 2, 2, BACKEND_TILE.FLOOR_GRASS, 0);
+  const grid = gridOfIds(BACKEND_TILE.FLOOR_GRASS.id, 5, 5);
+  const instructions = getSewerTerrainInstructions(grid, 2, 2, BACKEND_TILE.FLOOR_GRASS.id);
   const quadrants = instructions.filter((item) => item.quadrant !== QUADRANT.FULL);
 
   assert.equal(quadrants.length, 4);
@@ -52,27 +52,30 @@ test('grass center uses center tiles when surrounded by grass', () => {
   }
 });
 
-test('door composition adds lintel and side overlays near walls', () => {
-  const grid = gridWith(BACKEND_TILE.FLOOR);
-  grid[0][1] = BACKEND_TILE.WALL_TOP;
-  grid[1][0] = BACKEND_TILE.WALL_TOP;
-  grid[1][2] = BACKEND_TILE.WALL_TOP;
+test('door with wall on west side only gets STITCH_LEFT overlay', () => {
+  const grid = gridOfIds(BACKEND_TILE.FLOOR.id);
+  grid[1][0] = BACKEND_TILE.WALL.id;
 
-  const instructions = getSewerTerrainInstructions(grid, 1, 1, BACKEND_TILE.DOOR, 0);
+  const instructions = getSewerTerrainInstructions(grid, 1, 1, BACKEND_TILE.DOOR.id);
 
-  assert.ok(instructions.some((item) => item.srcIndex === TERRAIN_INDEX.DOOR));
-  assert.ok(instructions.some((item) => item.srcIndex === TERRAIN_INDEX.DOOR_SIDE_LEFT));
-  assert.ok(instructions.some((item) => item.srcIndex === TERRAIN_INDEX.DOOR_SIDE_RIGHT));
+  assert.ok(instructions.some((item) => item.srcIndex === BACKEND_TILE.DOOR.atlasIndex));
+  assert.ok(instructions.some((item) => WALL_INDEX.STITCH_LEFT.includes(item.srcIndex)));
+  assert.ok(!instructions.some((item) => WALL_INDEX.STITCH_RIGHT.includes(item.srcIndex)));
 });
 
-// --- New tile tests: pass the tile id (not the object) per current API. ---
+test('door with wall on east side only gets STITCH_RIGHT overlay', () => {
+  const grid = gridOfIds(BACKEND_TILE.FLOOR.id);
+  grid[1][2] = BACKEND_TILE.WALL.id;
 
-const gridOfIds = (tileId, width = 3, height = 3) =>
-  Array.from({ length: height }, () => Array.from({ length: width }, () => tileId));
+  const instructions = getSewerTerrainInstructions(grid, 1, 1, BACKEND_TILE.DOOR.id);
+
+  assert.ok(instructions.some((item) => WALL_INDEX.STITCH_RIGHT.includes(item.srcIndex)));
+  assert.ok(!instructions.some((item) => WALL_INDEX.STITCH_LEFT.includes(item.srcIndex)));
+});
 
 test('HIGH_GRASS renders floor base + grass quadrants using HIGH_GRASS_CENTER', () => {
   const grid = gridOfIds(BACKEND_TILE.HIGH_GRASS.id, 5, 5);
-  const instructions = getSewerTerrainInstructions(grid, 2, 2, BACKEND_TILE.HIGH_GRASS.id, 0);
+  const instructions = getSewerTerrainInstructions(grid, 2, 2, BACKEND_TILE.HIGH_GRASS.id);
 
   const full = instructions.filter((i) => i.quadrant === QUADRANT.FULL);
   const quadrants = instructions.filter((i) => i.quadrant !== QUADRANT.FULL);
@@ -90,7 +93,7 @@ test('HIGH_GRASS renders floor base + grass quadrants using HIGH_GRASS_CENTER', 
 test('EMPTY_DECO renders floor base + decoration overlay', () => {
   const grid = gridOfIds(BACKEND_TILE.FLOOR.id);
   grid[1][1] = BACKEND_TILE.EMPTY_DECO.id;
-  const instructions = getSewerTerrainInstructions(grid, 1, 1, BACKEND_TILE.EMPTY_DECO.id, 0);
+  const instructions = getSewerTerrainInstructions(grid, 1, 1, BACKEND_TILE.EMPTY_DECO.id);
 
   assert.equal(instructions.length, 2, 'floor base + deco overlay');
   assert.ok(
@@ -99,31 +102,8 @@ test('EMPTY_DECO renders floor base + decoration overlay', () => {
   );
 });
 
-test('WALL_DECO fallback through terrainMapper returns drain variant', () => {
-  const grid = gridOfIds(BACKEND_TILE.FLOOR.id);
-  grid[1][1] = BACKEND_TILE.WALL_DECO.id;
-  const instructions = getSewerTerrainInstructions(grid, 1, 1, BACKEND_TILE.WALL_DECO.id, 0);
-
-  assert.equal(instructions.length, 1);
-  assert.ok(
-    WALL_INDEX.DECO.includes(instructions[0].srcIndex),
-    `expected a DECO variant, got ${instructions[0].srcIndex}`
-  );
-});
-
-test('SECRET_DOOR orientation picks WALL_TOP when walkable tile is below', () => {
-  const grid = [
-    [BACKEND_TILE.WALL_TOP.id,   BACKEND_TILE.WALL_TOP.id,    BACKEND_TILE.WALL_TOP.id],
-    [BACKEND_TILE.WALL_TOP.id,   BACKEND_TILE.SECRET_DOOR.id, BACKEND_TILE.WALL_TOP.id],
-    [BACKEND_TILE.FLOOR.id,      BACKEND_TILE.FLOOR.id,       BACKEND_TILE.FLOOR.id],
-  ];
-  const instructions = getSewerTerrainInstructions(grid, 1, 1, BACKEND_TILE.SECRET_DOOR.id, 0);
-
-  assert.equal(instructions.length, 1);
-  assert.equal(instructions[0].srcIndex, BACKEND_TILE.WALL_TOP.atlasIndex);
-});
-
-test('isWallTile accepts new wall variants', () => {
+test('isWallTile recognises WALL, WALL_DECO and SECRET_DOOR', () => {
+  assert.equal(isWallTile(BACKEND_TILE.WALL.id), true);
   assert.equal(isWallTile(BACKEND_TILE.WALL_DECO.id), true);
   assert.equal(isWallTile(BACKEND_TILE.SECRET_DOOR.id), true);
   assert.equal(isWallTile(BACKEND_TILE.HIGH_GRASS.id), false);

@@ -52,14 +52,9 @@ WALKABLE_TILES = {
 }
 
 BLOCKS_LOS_TILES = {
-    TileType.LOCKED_DOOR,
-    TileType.WALL_TOP,
-    TileType.WALL_LEFT,
-    TileType.WALL_RIGHT,
-    TileType.WALL_BOTTOM,
-    TileType.WALL_BOTTOM_LEFT,
-    TileType.WALL_BOTTOM_RIGHT,
+    TileType.WALL,
     TileType.WALL_DECO,
+    TileType.LOCKED_DOOR,
     TileType.SECRET_DOOR,
     TileType.HIGH_GRASS,
 }
@@ -195,7 +190,10 @@ class GameInstance:
         depth = max(1, min(MAX_FLOOR_ID, depth))
         self.depth = depth
 
-        generator = DungeonGenerator(self.width, self.height)
+        # Deterministic per-(game_id, depth) seed so reconnects/reloads see the
+        # same layout. Mirrors SPD's Dungeon.seedCurDepth().
+        floor_seed = hash((self.game_id, depth)) & 0xFFFFFFFF
+        generator = DungeonGenerator(self.width, self.height, seed=floor_seed)
         floor: FloorState
         if depth <= SEWERS_MAX_FLOOR:
             sewers_result = generator.generate_sewers(SewersProfile(depth=depth))
@@ -216,6 +214,7 @@ class GameInstance:
                     "room_connections": sewers_result.metadata.room_connections,
                     "start_room_id": sewers_result.metadata.start_room_id,
                     "end_room_id": sewers_result.metadata.end_room_id,
+                    "seed": sewers_result.metadata.seed,
                 },
             )
         elif depth == 5:

@@ -20,12 +20,12 @@ class SewersGenerationMixin:
     def _generate_sewers_attempt(self, profile: SewersProfile) -> SewersGenerationResult:
         self.grid = [[TileType.VOID for _ in range(self.width)] for _ in range(self.height)]
 
-        standard_count = random.randint(profile.STANDARD_ROOMS_MIN, profile.STANDARD_ROOMS_MAX)
-        special_count = random.randint(profile.SPECIAL_ROOMS_MIN, profile.SPECIAL_ROOMS_MAX)
+        standard_count = self.rng.randint(profile.STANDARD_ROOMS_MIN, profile.STANDARD_ROOMS_MAX)
+        special_count = self.rng.randint(profile.SPECIAL_ROOMS_MIN, profile.SPECIAL_ROOMS_MAX)
         hidden_count = profile.HIDDEN_ROOMS_COUNT
 
         layout_kind = "loop"
-        if standard_count >= 5 and random.random() < 0.5:
+        if standard_count >= 5 and self.rng.random() < 0.5:
             layout_kind = "figure_eight"
 
         standard_rooms = self._place_standard_rooms(standard_count, layout_kind)
@@ -128,7 +128,7 @@ class SewersGenerationMixin:
             if info.force_hidden:
                 info.hidden = True
             elif info.can_hide:
-                info.hidden = random.random() < hidden_prob
+                info.hidden = self.rng.random() < hidden_prob
 
         standard_room_ids = {room.room_id for room in standard_rooms}
         for room_id in standard_room_ids:
@@ -145,7 +145,7 @@ class SewersGenerationMixin:
                     if door_infos[idx].actual_tile == TileType.DOOR and not door_infos[idx].force_hidden
                 ]
                 if candidates:
-                    chosen = random.choice(candidates)
+                    chosen = self.rng.choice(candidates)
                     door_infos[chosen].hidden = False
 
         doors_by_pos: Dict[Tuple[int, int], List[DoorInfo]] = {}
@@ -208,17 +208,17 @@ class SewersGenerationMixin:
             traps=traps,
             start_room_id=entrance_id,
             end_room_id=exit_id,
+            seed=getattr(self, "seed", 0),
         )
 
-        self._classify_walls()
         self._decorate_sewers()
         return SewersGenerationResult(grid=self.grid, rooms=self.rooms, metadata=metadata)
 
     def _place_standard_rooms(self, count: int, layout_kind: str) -> List[Room]:
         dims = [
             (
-                random.randint(6, 10),
-                random.randint(5, 8),
+                self.rng.randint(6, 10),
+                self.rng.randint(5, 8),
             )
             for _ in range(count)
         ]
@@ -327,12 +327,12 @@ class SewersGenerationMixin:
                 available_templates = list(allowed_templates)
 
             weights = [tpl["weight"] for tpl in available_templates]
-            template = random.choices(available_templates, weights=weights, k=1)[0]
+            template = self.rng.choices(available_templates, weights=weights, k=1)[0]
             available_templates = [tpl for tpl in available_templates if tpl["name"] != template["name"]]
 
-            w = random.randint(template["w"][0], template["w"][1])
-            h = random.randint(template["h"][0], template["h"][1])
-            host = random.choice(standard_rooms)
+            w = self.rng.randint(template["w"][0], template["w"][1])
+            h = self.rng.randint(template["h"][0], template["h"][1])
+            host = self.rng.choice(standard_rooms)
 
             room = self._place_room_near_host(host, w, h, standard_rooms + rooms, padding=2)
             if not room:
@@ -352,9 +352,9 @@ class SewersGenerationMixin:
     def _place_hidden_rooms(self, count: int, host_candidates: List[Room]) -> List[Room]:
         rooms: List[Room] = []
         for _ in range(count):
-            w = random.randint(5, 7)
-            h = random.randint(5, 7)
-            host = random.choice(host_candidates)
+            w = self.rng.randint(5, 7)
+            h = self.rng.randint(5, 7)
+            host = self.rng.choice(host_candidates)
             room = self._place_room_near_host(host, w, h, host_candidates + rooms, padding=2)
             if not room:
                 raise RuntimeError("Failed to place hidden room")

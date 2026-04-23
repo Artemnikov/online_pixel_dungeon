@@ -100,6 +100,7 @@ class SewersGenerationMetadata:
     traps: Dict[Tuple[int, int], TrapInfo]
     start_room_id: int
     end_room_id: int
+    seed: int = 0
 
 
 @dataclass
