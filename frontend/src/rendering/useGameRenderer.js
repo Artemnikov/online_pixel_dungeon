@@ -116,7 +116,6 @@ export default function useGameRenderer({
       drawMobs(ctx, { entitiesRef, visionRef, assetImages, mobAnimRef, dyingMobsRef });
       drawPlayers(ctx, { entitiesRef, visionRef, assetImages, myPlayerId });
       advanceAndDrawProjectiles(ctx, { projectilesRef });
-      advanceAndDrawProjectiles(ctx, { projectilesRef });
 
       ctx.restore();
 
