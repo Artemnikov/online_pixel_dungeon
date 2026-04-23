@@ -145,6 +145,24 @@ export default function useGameSocket({
 
       // Sync mobs
       const currentServerMobIds = new Set(data.mobs.map(m => m.id));
+
+      // Snapshot mobs that die this tick before the sync removes them,
+      // otherwise the DEATH event handler below finds an empty entity map.
+      if (data.events) {
+        data.events.forEach(ev => {
+          if (ev.type !== 'DEATH') return;
+          const id = ev.data.target;
+          const mob = entitiesRef.current.mobs[id];
+          if (mob && !dyingMobsRef.current[id]) {
+            dyingMobsRef.current[id] = {
+              ...mob,
+              renderPos: { ...mob.renderPos },
+              deathStart: performance.now(),
+            };
+          }
+        });
+      }
+
       Object.keys(entitiesRef.current.mobs).forEach(id => {
         if (!currentServerMobIds.has(id)) {
           delete entitiesRef.current.mobs[id];
@@ -306,7 +324,7 @@ function handleEvent(event, {
     if (entitiesRef.current.mobs[src]) {
       if (!mobAnimRef.current[src]) mobAnimRef.current[src] = {};
       const mobName = entitiesRef.current.mobs[src]?.name;
-      const attackDuration = mobName === 'Goo' ? 300 : mobName === 'Scorpio' ? 200 : 250;
+      const attackDuration = mobName === 'Goo' ? 300 : mobName === 'Scorpio' ? 200 : mobName === 'Rat' ? 333 : 250;
       mobAnimRef.current[src].attackUntil = performance.now() + attackDuration;
     }
     return;

@@ -142,7 +142,6 @@ const drawWaterOverlay = (ctx, waterFrame, x, y) => {
 
 export const drawSewerTile = (ctx, atlasImage, waterFrames, grid, x, y, tile, waterFrameIndex, openDoors = new Set()) => {
   const useWallMapper = tile === BACKEND_TILE.WALL_TOP.id
-    || tile === BACKEND_TILE.SECRET_DOOR.id
     || tile === BACKEND_TILE.WALL_DECO.id;
   const instructions = useWallMapper
     ? getSewerWallInstructions(grid, x, y)

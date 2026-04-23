@@ -5,6 +5,7 @@ import {
   drawMobSprite,
   getGnollFrame,
   getGooFrame,
+  getRatFrame,
   getScorpioFrame,
 } from '../mobs';
 
@@ -16,7 +17,10 @@ export function drawMobs(ctx, { entitiesRef, visionRef, assetImages, mobAnimRef,
 
     let mobSprite = assetImages.rat;
     let sx = 0;
-    if (mob.name === 'Bat') {
+    if (mob.name === 'Rat') {
+      mobSprite = assetImages.rat;
+      sx = getRatFrame(mob, mobAnimRef.current, now);
+    } else if (mob.name === 'Bat') {
       mobSprite = assetImages.bat;
     } else if (mob.name === 'Gnoll') {
       mobSprite = assetImages.gnoll;
@@ -48,7 +52,8 @@ export function drawMobs(ctx, { entitiesRef, visionRef, assetImages, mobAnimRef,
     const elapsed = now - mob.deathStart;
     const isScorpioDeath = mob.name === 'Scorpio';
     const isGooDeath = mob.name === 'Goo';
-    const deathDuration = isScorpioDeath ? 417 : isGooDeath ? 300 : 625;
+    const isRatDeath = mob.name === 'Rat';
+    const deathDuration = isScorpioDeath ? 417 : isGooDeath ? 300 : isRatDeath ? 400 : 625;
     if (elapsed > deathDuration) { delete dyingMobsRef.current[id]; return; }
     if (!visionRef.current.visible.has(`${Math.round(mob.renderPos.x)},${Math.round(mob.renderPos.y)}`)) return;
     if (isScorpioDeath) {
@@ -57,6 +62,9 @@ export function drawMobs(ctx, { entitiesRef, visionRef, assetImages, mobAnimRef,
     } else if (isGooDeath) {
       const fi = Math.min(Math.floor(elapsed / 100), 2);
       drawMobSprite(ctx, mob, assetImages.goo, [5, 6, 7][fi] * FRAME_W);
+    } else if (isRatDeath) {
+      const fi = Math.min(Math.floor(elapsed / 100), 3);
+      drawMobSprite(ctx, mob, assetImages.rat, [11, 12, 13, 14][fi] * FRAME_W);
     } else {
       const fi = Math.min(Math.floor(elapsed / 125), 4);
       const sx = [7, 8, 9, 10, 11][fi] * FRAME_W;
