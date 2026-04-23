@@ -4,7 +4,7 @@ import {
   DEST_TILE_SIZE,
   QUADRANT,
   SOURCE_TILE_SIZE,
-  WATER_FRAME_DURATION_MS,
+  WATER_SCROLL_PX_PER_SEC,
 } from './constants.js';
 import { getSewerTerrainInstructions } from './terrainMapper.js';
 import { getSewerWallInstructions } from './wallMapper.js';
@@ -77,23 +77,25 @@ export const drawInstructions = (ctx, atlasImage, instructions, x, y) => {
   const dy = y * DEST_TILE_SIZE;
 
   for (const instruction of instructions) {
-    const { srcIndex, quadrant = QUADRANT.FULL, alpha, rotate, srcOffset, crop } = instruction;
+    const { srcIndex, quadrant = QUADRANT.FULL, alpha, rotate, srcOffset, crop, flipX } = instruction;
     if (typeof srcIndex !== 'number') continue;
 
     const raw = getSourceXY(srcIndex);
     const sx = raw.sx + (srcOffset?.x ?? 0);
     const sy = raw.sy + (srcOffset?.y ?? 0);
     const needsRotation = rotate != null && rotate !== 0;
+    const needsTransform = needsRotation || flipX;
     const prevAlpha = ctx.globalAlpha;
 
     if (typeof alpha === 'number') ctx.globalAlpha = alpha;
 
-    if (needsRotation) ctx.save();
+    if (needsTransform) ctx.save();
 
     if (quadrant === QUADRANT.FULL) {
-      if (needsRotation) {
+      if (needsTransform) {
         ctx.translate(dx + HALF_DEST, dy + HALF_DEST);
-        ctx.rotate(rotate * Math.PI / 180);
+        if (flipX) ctx.scale(-1, 1);
+        if (needsRotation) ctx.rotate(rotate * Math.PI / 180);
         ctx.drawImage(atlasImage, sx, sy, SOURCE_TILE_SIZE, SOURCE_TILE_SIZE, -HALF_DEST, -HALF_DEST, DEST_TILE_SIZE, DEST_TILE_SIZE);
       } else {
         const [csx, csy, csw, csh, cdx, cdy, cdw, cdh] =
@@ -103,11 +105,12 @@ export const drawInstructions = (ctx, atlasImage, instructions, x, y) => {
     } else {
       const rect = QUADRANT_RECTS[quadrant];
       if (rect) {
-        if (needsRotation) {
+        if (needsTransform) {
           const cx = dx + rect.dxOffset + rect.dw / 2;
           const cy = dy + rect.dyOffset + rect.dh / 2;
           ctx.translate(cx, cy);
-          ctx.rotate(rotate * Math.PI / 180);
+          if (flipX) ctx.scale(-1, 1);
+          if (needsRotation) ctx.rotate(rotate * Math.PI / 180);
           ctx.drawImage(atlasImage, sx + rect.sxOffset, sy + rect.syOffset, rect.sw, rect.sh, -rect.dw / 2, -rect.dh / 2, rect.dw, rect.dh);
         } else {
           ctx.drawImage(atlasImage, sx + rect.sxOffset, sy + rect.syOffset, rect.sw, rect.sh, dx + rect.dxOffset, dy + rect.dyOffset, rect.dw, rect.dh);
@@ -115,39 +118,63 @@ export const drawInstructions = (ctx, atlasImage, instructions, x, y) => {
       }
     }
 
-    if (needsRotation) ctx.restore();
+    if (needsTransform) ctx.restore();
     if (typeof alpha === 'number') ctx.globalAlpha = prevAlpha;
   }
 };
 
-export const getAnimatedWaterFrameIndex = (
-  nowMs,
-  frameCount,
-  frameDurationMs = WATER_FRAME_DURATION_MS
-) => {
-  if (!frameCount || frameCount <= 0) return 0;
-  return Math.floor(nowMs / frameDurationMs) % frameCount;
+export const getWaterTextureForDepth = (depth, waterFrames) => {
+  if (!waterFrames || waterFrames.length === 0) return null;
+  const region = Math.min(
+    waterFrames.length - 1,
+    Math.max(0, Math.floor(((depth ?? 1) - 1) / 5))
+  );
+  return waterFrames[region] ?? waterFrames[0];
 };
 
-const drawWaterOverlay = (ctx, waterFrame, x, y) => {
-  if (!waterFrame) return;
-  const dx = x * DEST_TILE_SIZE;
-  const dy = y * DEST_TILE_SIZE;
+export const buildWaterClipPath = (grid) => {
+  if (!grid || grid.length === 0) return null;
+  const path = new Path2D();
+  let hasAny = false;
+  for (let y = 0; y < grid.length; y++) {
+    const row = grid[y];
+    if (!row) continue;
+    for (let x = 0; x < row.length; x++) {
+      if (row[x] !== BACKEND_TILE.FLOOR_WATER.id) continue;
+      path.rect(x * DEST_TILE_SIZE, y * DEST_TILE_SIZE, DEST_TILE_SIZE, DEST_TILE_SIZE);
+      hasAny = true;
+    }
+  }
+  return hasAny ? path : null;
+};
+
+export const drawWaterBackground = (ctx, waterTex, clipPath, bounds, nowMs) => {
+  if (!waterTex || !clipPath || !bounds) return;
+  const pattern = ctx.createPattern(waterTex, 'repeat');
+  if (!pattern) return;
+
+  const scale = DEST_TILE_SIZE / waterTex.width;
+  const scrollPx = -(nowMs / 1000) * WATER_SCROLL_PX_PER_SEC;
+  pattern.setTransform(
+    new DOMMatrix().scaleSelf(scale).translateSelf(0, scrollPx / scale)
+  );
 
   ctx.save();
-  ctx.globalAlpha = 0.6;
-  ctx.drawImage(waterFrame, 0, 0, waterFrame.width, waterFrame.height, dx, dy, DEST_TILE_SIZE, DEST_TILE_SIZE);
+  ctx.clip(clipPath);
+  ctx.fillStyle = pattern;
+  ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
   ctx.restore();
 };
 
-export const drawSewerTile = (ctx, atlasImage, waterFrames, grid, x, y, tile, waterFrameIndex, openDoors = new Set()) => {
+export const drawSewerTile = (ctx, atlasImage, grid, x, y, tile, openDoors = new Set()) => {
   const useWallMapper = tile === BACKEND_TILE.WALL_TOP.id
     || tile === BACKEND_TILE.WALL_DECO.id;
   const instructions = useWallMapper
     ? getSewerWallInstructions(grid, x, y)
-    : getSewerTerrainInstructions(grid, x, y, tile, waterFrameIndex, openDoors);
+    : getSewerTerrainInstructions(grid, x, y, tile, openDoors);
 
-  if (instructions.length === 0) return false;
+  const isWater = tile === BACKEND_TILE.FLOOR_WATER.id;
+  if (instructions.length === 0 && !isWater) return false;
 
   drawInstructions(ctx, atlasImage, instructions, x, y);
 
@@ -161,11 +188,6 @@ export const drawSewerTile = (ctx, atlasImage, waterFrames, grid, x, y, tile, wa
     ctx.fillStyle = 'white';
     ctx.fillText(String(tile), dx + 1, dy + 7);
     ctx.restore();
-  }
-
-  if (tile === BACKEND_TILE.FLOOR_WATER.id && waterFrames && waterFrames.length > 0) {
-    const frame = waterFrames[waterFrameIndex % waterFrames.length];
-    drawWaterOverlay(ctx, frame, x, y);
   }
 
   return true;

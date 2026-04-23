@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { TILE_SIZE, MOVE_DURATION, CAMERA_LERP, easeOutQuad } from '../constants';
-import { getAnimatedWaterFrameIndex } from './sewers/draw';
+import { DEST_TILE_SIZE } from './sewers/constants';
+import { buildWaterClipPath, drawWaterBackground, getWaterTextureForDepth } from './sewers/draw';
 import { drawGrid } from './draw/grid';
 import { drawItems } from './draw/items';
 import { drawMobs } from './draw/mobs';
@@ -32,6 +33,15 @@ export default function useGameRenderer({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let animationFrameId;
+
+    const waterClipPath = buildWaterClipPath(grid);
+    const waterTex = getWaterTextureForDepth(depth, assetImages.waterFrames);
+    const gridBounds = {
+      x: 0,
+      y: 0,
+      w: (grid[0]?.length ?? 0) * DEST_TILE_SIZE,
+      h: grid.length * DEST_TILE_SIZE,
+    };
 
     const updateAnimations = () => {
       const now = performance.now();
@@ -100,11 +110,8 @@ export default function useGameRenderer({
       ctx.translate(-canvas.width / 2, -canvas.height / 2);
       ctx.translate(-cameraLerpRef.current.x, -cameraLerpRef.current.y);
 
-      const waterFrameIndex = getAnimatedWaterFrameIndex(
-        performance.now(),
-        assetImages.waterFrames.filter(Boolean).length || 1
-      );
-      drawGrid(ctx, { grid, depth, assetImages, visionRef, openDoorsRef, waterFrameIndex });
+      drawWaterBackground(ctx, waterTex, waterClipPath, gridBounds, performance.now());
+      drawGrid(ctx, { grid, depth, assetImages, visionRef, openDoorsRef });
       drawItems(ctx, { entitiesRef, visionRef, assetImages });
       drawMobs(ctx, { entitiesRef, visionRef, assetImages, mobAnimRef, dyingMobsRef });
       drawPlayers(ctx, { entitiesRef, visionRef, assetImages, myPlayerId });

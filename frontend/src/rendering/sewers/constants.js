@@ -78,7 +78,7 @@ export const WALL_INDEX = {
   DECO: [atlasIndex(1, 3), atlasIndex(5, 3)],
 };
 
-export const WATER_FRAME_DURATION_MS = 140;
+export const WATER_SCROLL_PX_PER_SEC = 10;
 
 export const QUADRANT_NEIGHBORS = {
   tl: [

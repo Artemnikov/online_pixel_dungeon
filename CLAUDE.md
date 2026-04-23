@@ -2,31 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Important
+This project is a remake of the original shattered pixel dungeon game.
+Before implementing anything, find the exact flow rules from the original project at ../shattered-pixel-dungeon and implement based on the original game rules logic and map building.
+
 ## Commands
-
-**Frontend** (dev server on :5173):
-```bash
-cd frontend && npm run dev
-npm run lint
-npm run build
-```
-
-**Backend** (uvicorn on :8080):
-```bash
-cd backend && source venv/bin/activate && python app/main.py
-```
-
-**Full stack via Docker** (frontend :3000, backend :8080):
-```bash
-docker compose up
-docker compose build
-```
-
-**Tests** (run inside Docker):
-```bash
-./run_tests.sh
-```
-Test files live in `backend/tests/` — individual tests can be run with `docker compose exec backend python tests/<test_file>.py`.
 
 ## Architecture
 
@@ -48,6 +28,18 @@ Real-time multiplayer dungeon crawler. Client-server over WebSockets.
 
 **Assets** (`assets/` and `frontend/src/assets/pixel-dungeon/`) — Shattered Pixel Dungeon sprites, tilesets, themes, audio.
 
+## Debugging Tile Rendering / Map Analysis
+
+Dev build exposes `window.__debug` (see `frontend/src/dev/useDebugApi.js`). When investigating rendering, vision, or map bugs, use `mcp__chrome-devtools` to navigate to `http://localhost:5173`, start a game, then `evaluate_script` against the page:
+
+- `__debug.ascii()` — ASCII map with entities overlaid
+- `__debug.at(x, y)` — tile id/name + entities at cell + visibility/door state
+- `__debug.entities()` — players + mobs with positions
+- `__debug.vision()`, `__debug.camera()`, `__debug.me()`, `__debug.depth()`, `__debug.bounds()`
+- `__debug.help()` — list all
+
+Prefer `evaluate_script` over `take_screenshot` — cheaper and gives structured data. Screenshot only when the data looks correct but visuals look wrong.
+
 ## Key Patterns
 
 - Game state lives entirely on the server (`GameInstance`); frontend is a pure renderer
@@ -55,5 +47,3 @@ Real-time multiplayer dungeon crawler. Client-server over WebSockets.
 - Dungeon is 50 floors; floor gen is in `engine/dungeon/sewers_generation.py`
 - Bosses spawn every 5 floors
 - Vision uses line-of-sight; factions determine friendly-fire behavior
-
-Do not run tests. i will test it myself.

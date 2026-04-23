@@ -40,6 +40,15 @@ const tileInstr = (asset) => ({
   ...(asset.crop      != null && { crop:      asset.crop }),
 });
 
+// Crops to cap+face rows only; skips WALL_BOTTOM's black shadow that would
+// otherwise leak onto the wall tile below the door.
+const topCapBelowDoor = () => ({
+  srcIndex: BACKEND_TILE.WALL_BOTTOM.atlasIndex,
+  quadrant: QUADRANT.FULL,
+  srcOffset: { y: 8 },
+  crop: { top: 5 / 16 },
+});
+
 const getTerrainQuadrants = (grid, x, y, matcher, centerVariants, edgeByQuadrant, salt) => {
   const center = pickVariant(centerVariants, x, y, salt);
   const out = [];
@@ -52,7 +61,7 @@ const getTerrainQuadrants = (grid, x, y, matcher, centerVariants, edgeByQuadrant
   return out;
 };
 
-export const getSewerTerrainInstructions = (grid, x, y, tile, frameIndex = 0, openDoors = new Set()) => {
+export const getSewerTerrainInstructions = (grid, x, y, tile, openDoors = new Set()) => {
   if (tile === BACKEND_TILE.VOID.id) return [];
 
   if (tile === BACKEND_TILE.FLOOR.id) {
@@ -96,19 +105,13 @@ export const getSewerTerrainInstructions = (grid, x, y, tile, frameIndex = 0, op
   }
 
   if (tile === BACKEND_TILE.FLOOR_WATER.id) {
-    const instructions = [{ srcIndex: getFloorBase(x, y), quadrant: QUADRANT.FULL }];
-    instructions.push(
-      ...getTerrainQuadrants(
-        grid,
-        x,
-        y,
-        isWaterTile,
-        TERRAIN_INDEX.WATER_CENTER,
-        TERRAIN_INDEX.WATER_EDGE,
-        frameIndex
-      )
-    );
-    return instructions;
+    const out = [];
+    for (const q of [QUADRANT.TL, QUADRANT.TR, QUADRANT.BL, QUADRANT.BR]) {
+      if (!shouldUseCornerType(grid, x, y, isWaterTile, q)) {
+        out.push({ srcIndex: TERRAIN_INDEX.WATER_EDGE[q], quadrant: q });
+      }
+    }
+    return out;
   }
 
   if (tile === BACKEND_TILE.FLOOR_GRASS.id) {
@@ -145,27 +148,45 @@ export const getSewerTerrainInstructions = (grid, x, y, tile, frameIndex = 0, op
     const north = getTile(grid, x, y - 1);
     const south = getTile(grid, x, y + 1);
     const isDoor = (t) => t === BACKEND_TILE.DOOR.id || t === BACKEND_TILE.LOCKED_DOOR.id;
+    const isWalkable = (t) => t !== BACKEND_TILE.VOID.id && t !== undefined && !isWallTile(t);
     if (isDoor(south)) return [tileInstr(BACKEND_TILE.WALL_TOP), tileInstr(BACKEND_TILE.WALL_LEFT)];
     if (isDoor(north)) return [
       tileInstr(BACKEND_TILE.WALL_TOP),
       tileInstr(BACKEND_TILE.WALL_LEFT),
-      tileInstr(BACKEND_TILE.WALL_BOTTOM),
+      topCapBelowDoor(),
     ];
-    return [tileInstr(BACKEND_TILE.WALL_LEFT)];
+    const variant = hashCell(x, y) % WALL_INDEX.TOP.length;
+    const instructions = [
+      { srcIndex: WALL_INDEX.TOP[variant], quadrant: QUADRANT.FULL },
+      { srcIndex: WALL_INDEX.FACE_SOLID[variant], quadrant: QUADRANT.FULL },
+      tileInstr(BACKEND_TILE.WALL_LEFT),
+    ];
+    if (isWalkable(north)) instructions.push(topCapBelowDoor());
+    return instructions;
   }
   if (tile === BACKEND_TILE.WALL_RIGHT.id) {
     const north = getTile(grid, x, y - 1);
     const south = getTile(grid, x, y + 1);
     const isDoor = (t) => t === BACKEND_TILE.DOOR.id || t === BACKEND_TILE.LOCKED_DOOR.id;
+    const isWalkable = (t) => t !== BACKEND_TILE.VOID.id && t !== undefined && !isWallTile(t);
     if (isDoor(south)) return [tileInstr(BACKEND_TILE.WALL_LEFT), tileInstr(BACKEND_TILE.WALL_TOP)];
-    if (isDoor(north)) return [tileInstr(BACKEND_TILE.WALL_LEFT), tileInstr(BACKEND_TILE.WALL_BOTTOM)];
-    return [
+    if (isDoor(north)) return [
+      tileInstr(BACKEND_TILE.WALL_TOP),
+      { ...tileInstr(BACKEND_TILE.WALL_LEFT), flipX: true },
+      topCapBelowDoor(),
+    ];
+    const instructions = [
       { srcIndex: BACKEND_TILE.WALL_TOP.atlasIndex, quadrant: QUADRANT.FULL },
       tileInstr(BACKEND_TILE.WALL_RIGHT),
     ];
+    if (isWalkable(north)) instructions.push(topCapBelowDoor());
+    return instructions;
   }
-  if (tile === BACKEND_TILE.WALL_BOTTOM_LEFT.id) return [tileInstr(BACKEND_TILE.WALL_BOTTOM_LEFT)];
-  if (tile === BACKEND_TILE.WALL_BOTTOM_RIGHT.id) return [tileInstr(BACKEND_TILE.WALL_BOTTOM_RIGHT)];
+  if (tile === BACKEND_TILE.WALL_BOTTOM_LEFT.id) return [tileInstr(BACKEND_TILE.WALL_LEFT)];
+  if (tile === BACKEND_TILE.WALL_BOTTOM_RIGHT.id) return [
+    { srcIndex: BACKEND_TILE.WALL_TOP.atlasIndex, quadrant: QUADRANT.FULL },
+    tileInstr(BACKEND_TILE.WALL_RIGHT),
+  ];
 
   if (tile === BACKEND_TILE.WALL_DECO.id) {
     const variant = pickVariant(WALL_INDEX.DECO, x, y);

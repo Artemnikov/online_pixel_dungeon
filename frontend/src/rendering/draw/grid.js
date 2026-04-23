@@ -2,13 +2,17 @@ import { TILE_SIZE } from '../../constants';
 import { drawSpriteTile, fallbackTileMap } from '../sprites';
 import { drawSewerTile } from '../sewers/draw';
 
-export function drawGrid(ctx, { grid, depth, assetImages, visionRef, openDoorsRef, waterFrameIndex }) {
+export function drawGrid(ctx, { grid, depth, assetImages, visionRef, openDoorsRef }) {
   const useSewerTiles = depth <= 5;
 
   for (let y = 0; y < grid.length; y++) {
     for (let x = 0; x < grid[y].length; x++) {
       const tile = grid[y][x];
-      if (tile === 0) continue;
+      if (tile === 0) {
+        ctx.fillStyle = 'black';
+        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        continue;
+      }
 
       const key = `${x},${y}`;
       const isVisible = visionRef.current.visible.has(key);
@@ -26,12 +30,10 @@ export function drawGrid(ctx, { grid, depth, assetImages, visionRef, openDoorsRe
         tileDrawn = drawSewerTile(
           ctx,
           assetImages.tiles,
-          assetImages.waterFrames,
           grid,
           x,
           y,
           tile,
-          waterFrameIndex,
           openDoorsRef.current
         );
       }

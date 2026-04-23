@@ -12,6 +12,7 @@ import useGameRenderer from './rendering/useGameRenderer';
 import useGameSocket from './net/useGameSocket';
 import useKeyboardControls from './input/useKeyboardControls';
 import useCanvasControls from './input/useCanvasControls';
+import useDebugApi from './dev/useDebugApi';
 
 import HUD from './ui/HUD';
 import Toolbar from './ui/Toolbar';
@@ -60,8 +61,15 @@ function App() {
   const wasDownedRef = useRef(false);
   const mobAnimRef = useRef({});
   const dyingMobsRef = useRef({});
+  const depthRef = useRef(1);
 
   useEffect(() => { targetingModeRef.current = targetingMode; }, [targetingMode]);
+  useEffect(() => { depthRef.current = depth; }, [depth]);
+
+  useDebugApi({
+    gridRef, entitiesRef, visionRef, openDoorsRef,
+    myPlayerIdRef, panOffsetRef, cameraLerpRef, zoomRef, depthRef,
+  });
 
   // --- infra hooks ---
   useAudioUnlock();

@@ -278,12 +278,6 @@ class CorridorsMixin:
                     continue
                 if not (self._in_bounds(nx, ny) and self.grid[ny][nx] == TileType.VOID):
                     continue
-                if any(
-                    0 <= nx + adx < self.width and 0 <= ny + ady < self.height
-                    and room_mask[ny + ady][nx + adx] != -1
-                    for adx, ady in ((1, 0), (-1, 0), (0, 1), (0, -1))
-                ):
-                    continue
                 if dy < 0:
                     self.grid[ny][nx] = TileType.WALL_LEFT if dx < 0 else TileType.WALL_RIGHT
                 else:
@@ -338,10 +332,23 @@ class CorridorsMixin:
                 north = y - 1 >= 0          and self.grid[y - 1][x] in walkable
                 east  = x + 1 < self.width  and self.grid[y][x + 1] in walkable
                 west  = x - 1 >= 0          and self.grid[y][x - 1] in walkable
-                if south:        self.grid[y][x] = TileType.WALL_TOP
-                elif north:      self.grid[y][x] = TileType.WALL_BOTTOM
-                elif east:       self.grid[y][x] = TileType.WALL_LEFT
-                elif west:       self.grid[y][x] = TileType.WALL_RIGHT
+                if east:
+                    self.grid[y][x] = TileType.WALL_LEFT
+                elif west:
+                    self.grid[y][x] = TileType.WALL_RIGHT
+                elif south:
+                    self.grid[y][x] = TileType.WALL_TOP
+                elif north:
+                    self.grid[y][x] = TileType.WALL_BOTTOM
+        # Promote start-of-line: a WALL_LEFT whose east is WALL_TOP is the
+        # westernmost tile of a horizontal cap run (typically produced at a
+        # corridor direction change). Render it as part of the cap line.
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.grid[y][x] != TileType.WALL_LEFT:
+                    continue
+                if x + 1 < self.width and self.grid[y][x + 1] == TileType.WALL_TOP:
+                    self.grid[y][x] = TileType.WALL_TOP
         # Final pass: fix room corners — top corners extend side walls, bottom corners cleared.
         for room in self.rooms:
             for cx, cy, tile in (
