@@ -90,16 +90,23 @@ test('HIGH_GRASS renders floor base + grass quadrants using HIGH_GRASS_CENTER', 
   }
 });
 
-test('EMPTY_DECO renders floor base + decoration overlay', () => {
+test('EMPTY_DECO renders a single variant from EMPTY_DECO_VARIANTS', () => {
   const grid = gridOfIds(BACKEND_TILE.FLOOR.id);
   grid[1][1] = BACKEND_TILE.EMPTY_DECO.id;
   const instructions = getSewerTerrainInstructions(grid, 1, 1, BACKEND_TILE.EMPTY_DECO.id);
 
-  assert.equal(instructions.length, 2, 'floor base + deco overlay');
+  assert.equal(instructions.length, 1, 'single full-tile pick');
   assert.ok(
-    instructions.some((i) => i.srcIndex === BACKEND_TILE.EMPTY_DECO.atlasIndex),
-    'deco overlay uses EMPTY_DECO atlasIndex'
+    TERRAIN_INDEX.EMPTY_DECO_VARIANTS.includes(instructions[0].srcIndex),
+    `expected an EMPTY_DECO_VARIANTS sprite, got ${instructions[0].srcIndex}`
   );
+});
+
+test('EMPTY_DECO variant is stable across calls for the same cell', () => {
+  const grid = gridOfIds(BACKEND_TILE.EMPTY_DECO.id);
+  const a = getSewerTerrainInstructions(grid, 3, 4, BACKEND_TILE.EMPTY_DECO.id);
+  const b = getSewerTerrainInstructions(grid, 3, 4, BACKEND_TILE.EMPTY_DECO.id);
+  assert.equal(a[0].srcIndex, b[0].srcIndex);
 });
 
 test('isWallTile recognises WALL, WALL_DECO and SECRET_DOOR', () => {

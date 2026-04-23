@@ -42,6 +42,11 @@ export const TERRAIN_INDEX = {
   FLOOR_VARIANTS: [atlasIndex(0, 0), atlasIndex(1, 0), atlasIndex(2, 0)],
   FLOOR_ALT_VARIANTS: [atlasIndex(6, 0), atlasIndex(7, 0), atlasIndex(8, 0)],
 
+  // SPD DungeonTileSheet: FLOOR_DECO = GROUND+1, FLOOR_DECO_ALT = GROUND+7.
+  // EMPTY_DECO renders as one of these full-tile decorated floor variants,
+  // picked by hashCell for per-cell but stable variation.
+  EMPTY_DECO_VARIANTS: [atlasIndex(1, 0), atlasIndex(7, 0)],
+
   GRASS_CENTER: [atlasIndex(2, 4), atlasIndex(5, 4), atlasIndex(6, 4)],
   HIGH_GRASS_CENTER: [atlasIndex(10, 7), atlasIndex(13, 7)],
   GRASS_EDGE: {
