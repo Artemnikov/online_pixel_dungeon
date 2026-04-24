@@ -8,6 +8,10 @@ class ExitRoom(StandardRoom):
     def is_exit(self) -> bool:
         return True
 
+    # Don't trap the room the player needs to walk to to descend.
+    def can_place_trap(self, p):
+        return False
+
     def paint(self, level) -> None:
         level.fill_rect(self.left, self.top, self.right, self.bottom, level.WALL)
         level.fill_rect(self.left + 1, self.top + 1, self.right - 1, self.bottom - 1, level.FLOOR)

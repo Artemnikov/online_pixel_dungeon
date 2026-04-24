@@ -95,16 +95,15 @@ class DungeonGenerator(SewersGenerationMixin, CorridorsMixin, TerrainMixin):
                          use_v2_pipeline: bool = False) -> SewersGenerationResult:
         """Generate a sewers floor.
 
-        `use_v2_pipeline=True` runs the SPD-style Room/Builder/Painter
-        pipeline (Phase D). The legacy monolithic flow is still the
-        default until the new pipeline covers special/hidden/locked rooms
-        and traps on par with the old one.
+        Default is the legacy monolithic pipeline. Pass
+        `use_v2_pipeline=True` to opt into the SPD-style
+        Room/Builder/Painter flow (Phase D+). v2 will become the default
+        once it covers special rooms and locked-door + key gating with
+        feature parity.
         """
         profile = profile or SewersProfile()
 
         if use_v2_pipeline:
-            # Delegate to the new orchestrator. Isolated so a failure can
-            # fall back rather than crash the whole run.
             from app.engine.dungeon.sewers_level import generate_sewers_level
             result = generate_sewers_level(self.width, self.height, profile,
                                            seed=self.seed)

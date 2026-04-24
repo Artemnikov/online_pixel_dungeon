@@ -29,6 +29,7 @@ from app.engine.dungeon.models import (
 )
 from app.engine.dungeon.painters import LevelCanvas, SewerPainter
 from app.engine.dungeon.rooms.room import Room
+from app.engine.dungeon.rooms.secret import SecretRoom
 from app.engine.dungeon.rooms.standard import EmptyRoom, EntranceRoom, ExitRoom
 
 
@@ -49,6 +50,14 @@ def generate_sewers_level(width: int, height: int, profile: SewersProfile,
         r = EmptyRoom()
         r.size_cat = _roll_size_cat(r, rng)
         init_rooms.append(r)
+
+    # Hidden rooms — small, single-connection, accessed via SECRET_DOOR.
+    # Sized at HIDDEN_ROOMS_COUNT from the profile (default 2).
+    secret_rooms: List[SecretRoom] = []
+    for _ in range(profile.HIDDEN_ROOMS_COUNT):
+        s = SecretRoom()
+        secret_rooms.append(s)
+        init_rooms.append(s)
 
     # --- 2. Run the builder with up to ~20 attempts ---------------------
     rooms: Optional[List[Room]] = None
@@ -73,9 +82,13 @@ def generate_sewers_level(width: int, height: int, profile: SewersProfile,
 
     # --- 3. Paint -------------------------------------------------------
     canvas = LevelCanvas(width, height, rng, fill=TileType.WALL)
+    n_traps = rng.randint(profile.TRAPS_MIN, profile.TRAPS_MAX)
+    # Equal weight for each configured trap type.
+    weights = tuple(1.0 for _ in profile.TRAP_TYPES)
     painter = (SewerPainter(rng=rng, depth=profile.depth)
                .set_water(profile.WATER_RATIO, 5)
-               .set_grass(profile.GRASS_RATIO, 4))
+               .set_grass(profile.GRASS_RATIO, 4)
+               .set_traps(n_traps, profile.TRAP_TYPES, weights))
     if not painter.paint(canvas, rooms):
         raise RuntimeError("Sewers painter produced nothing")
 
@@ -88,17 +101,24 @@ def generate_sewers_level(width: int, height: int, profile: SewersProfile,
     from app.engine.dungeon.rooms.connection import ConnectionRoom
     id_for_new = {}
     legacy_rooms: List[LegacyRoom] = []
+    hidden_room_ids: List[int] = []
+    standard_room_ids: List[int] = []
     for new_r in rooms:
         if isinstance(new_r, ConnectionRoom):
             continue
         rid = len(legacy_rooms)
         id_for_new[id(new_r)] = rid
+        kind = RoomKind.HIDDEN if isinstance(new_r, SecretRoom) else RoomKind.STANDARD
+        if kind == RoomKind.HIDDEN:
+            hidden_room_ids.append(rid)
+        else:
+            standard_room_ids.append(rid)
         legacy_rooms.append(LegacyRoom(
             x=new_r.left + 1,
             y=new_r.top + 1,
             width=max(0, new_r.right - new_r.left - 1),
             height=max(0, new_r.bottom - new_r.top - 1),
-            kind=RoomKind.STANDARD,
+            kind=kind,
             room_id=rid,
         ))
 
@@ -136,19 +156,33 @@ def generate_sewers_level(width: int, height: int, profile: SewersProfile,
                 if id(onward) not in visited:
                     q.append(onward)
 
+    # Record every hidden door position so the search-reveals-door runtime
+    # logic can swap the SECRET_DOOR tile for DOOR on discovery. Value is
+    # the terrain tile to restore on reveal (DOOR by convention).
+    hidden_door_positions = {}
+    processed = set()
+    for new_r in rooms:
+        for door in new_r.connected.values():
+            if door is None or id(door) in processed:
+                continue
+            processed.add(id(door))
+            from app.engine.dungeon.rooms.room import DoorType
+            if door.type == DoorType.HIDDEN:
+                hidden_door_positions[(door.x, door.y)] = TileType.DOOR
+
     metadata = SewersGenerationMetadata(
         region="sewers",
         layout_kind="loop_v2",
         room_ids_by_kind={
-            RoomKind.STANDARD: [lr.room_id for lr in legacy_rooms],
+            RoomKind.STANDARD: standard_room_ids,
             RoomKind.SPECIAL: [],
-            RoomKind.HIDDEN: [],
+            RoomKind.HIDDEN: hidden_room_ids,
         },
         room_connections=edges,
-        hidden_doors={},  # door-type HIDDEN is rendered as SECRET_DOOR directly
+        hidden_doors=hidden_door_positions,
         locked_doors={},
         key_spawns={},
-        traps={},
+        traps=dict(painter.placed_traps),
         start_room_id=entrance_id,
         end_room_id=exit_id,
         seed=seed or 0,

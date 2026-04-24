@@ -20,9 +20,10 @@ Port of SPD `levels/painters/RegularPainter.java`. Steps (in order):
 from __future__ import annotations
 
 from collections import deque
-from typing import Iterable, List, Optional, Set
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
-from app.engine.dungeon.constants import TileType
+from app.engine.dungeon.constants import TileType, TrapType
+from app.engine.dungeon.models import TrapInfo
 from app.engine.dungeon.painters.level import LevelCanvas
 from app.engine.dungeon.painters.patch import generate_patch
 from app.engine.dungeon.painters.painter import Painter
@@ -53,6 +54,12 @@ class RegularPainter(Painter):
         self.water_smoothness = 0
         self.grass_fill = 0.0
         self.grass_smoothness = 0
+        self.n_traps = 0
+        self.trap_types: Tuple[str, ...] = ()
+        self.trap_weights: Tuple[float, ...] = ()
+        # Filled by paint() so the orchestrator can read out traps after
+        # painting. Mirrors what SPD does via Level.traps SparseArray.
+        self.placed_traps: Dict[Tuple[int, int], TrapInfo] = {}
 
     # ----- fluent setters ----------------------------------------------
     def set_water(self, fill: float, smoothness: int) -> "RegularPainter":
@@ -63,6 +70,20 @@ class RegularPainter(Painter):
     def set_grass(self, fill: float, smoothness: int) -> "RegularPainter":
         self.grass_fill = fill
         self.grass_smoothness = smoothness
+        return self
+
+    def set_traps(self, count: int, types: Tuple[str, ...],
+                  weights: Tuple[float, ...]) -> "RegularPainter":
+        """Set trap budget + class table.
+
+        Mirrors SPD `RegularPainter.setTraps(num, classes, chances)`. The
+        weights are relative; one trap class is picked per placement using
+        them. For the remake's single-trap-class case, pass
+        `(TrapType.WORN_DART,), (1.0,)`.
+        """
+        self.n_traps = max(0, count)
+        self.trap_types = types
+        self.trap_weights = weights
         return self
 
     # ----- main pipeline ------------------------------------------------
@@ -89,6 +110,8 @@ class RegularPainter(Painter):
             self._paint_water(level, rooms)
         if self.grass_fill > 0:
             self._paint_grass(level, rooms)
+        if self.n_traps > 0 and self.trap_types:
+            self._paint_traps(level, rooms)
 
         self.decorate(level, rooms)
         return True
@@ -187,13 +210,58 @@ class RegularPainter(Painter):
                 level.grid[y][x] = TileType.FLOOR_GRASS
 
 
+    # ----- traps --------------------------------------------------------
+    def _paint_traps(self, level: LevelCanvas, rooms: List[Room]) -> None:
+        """Place up to n_traps on FLOOR cells filtered by per-room can_place_trap.
+
+        Mirrors SPD RegularPainter.paintTraps semantics:
+        - candidates = floor cells in rooms whose can_place_trap returned True
+        - cap at min(n_traps, len(valid)/5) — never more than 1 trap per 5 valid
+          tiles (avoids overwhelming small floors)
+        - mark trap tile as SECRET_TRAP-equivalent (we don't have a separate
+          tile, so leave the FLOOR tile in place; trap state lives in
+          placed_traps and is consulted at runtime)
+        """
+        valid: List[Tuple[int, int]] = []
+        for r in rooms:
+            for (x, y) in r.trap_placeable_points():
+                if not (0 <= x < level.width and 0 <= y < level.height):
+                    continue
+                if level.grid[y][x] == TileType.FLOOR:
+                    valid.append((x, y))
+
+        if not valid:
+            return
+
+        budget = min(self.n_traps, max(1, len(valid) // 5))
+        self.rng.shuffle(valid)
+
+        # Pick a class per placement using the weights.
+        weight_total = sum(self.trap_weights) or 1.0
+        for (x, y) in valid[:budget]:
+            roll = self.rng.random() * weight_total
+            acc = 0.0
+            chosen_type = self.trap_types[0]
+            for t, w in zip(self.trap_types, self.trap_weights):
+                acc += w
+                if roll <= acc:
+                    chosen_type = t
+                    break
+            self.placed_traps[(x, y)] = TrapInfo(x=x, y=y, trap_type=chosen_type)
+
+
 def _all_standard_rooms_reachable(rooms: List[Room], start: Room) -> bool:
     """BFS over the connection graph using only non-HIDDEN doors.
 
     Mirrors SPD's Graph.buildDistanceMap-based guard in paintDoors.
     Called after a door is tentatively promoted to HIDDEN; if any
     StandardRoom becomes unreachable from `start`, the caller rolls back.
+
+    SecretRooms are excluded — they are *intentionally* only reachable
+    via HIDDEN doors, so their unreachability here is expected and must
+    not trigger a rollback.
     """
+    from app.engine.dungeon.rooms.secret import SecretRoom
     from app.engine.dungeon.rooms.standard import StandardRoom
     seen = {id(start)}
     q = deque([start])
@@ -207,6 +275,8 @@ def _all_standard_rooms_reachable(rooms: List[Room], start: Room) -> bool:
             seen.add(id(other))
             q.append(other)
     for r in rooms:
+        if isinstance(r, SecretRoom):
+            continue
         if isinstance(r, StandardRoom) and id(r) not in seen:
             return False
     return True

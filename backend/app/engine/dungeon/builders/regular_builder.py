@@ -16,6 +16,7 @@ from typing import List, Optional
 
 from app.engine.dungeon.builders.builder import Builder
 from app.engine.dungeon.rooms.connection import ConnectionRoom, TunnelRoom
+from app.engine.dungeon.rooms.secret.maze_connection_room import MazeConnectionRoom
 from app.engine.dungeon.rooms.room import Direction, Room
 from app.engine.dungeon.rooms.standard.standard_room import StandardRoom
 
@@ -132,9 +133,17 @@ class RegularBuilder(Builder):
                 return False
 
             target = rooms_to_branch[i]
-            # Pick a branch host. SecretRoom prohibits branching off a
-            # ConnectionRoom (not implemented here yet).
-            curr = self.rng.choice(branchable)
+            # Pick a branch host. SecretRoom can't branch off a
+            # ConnectionRoom (per SPD: would let a tunnel reveal the path
+            # to a hidden room).
+            from app.engine.dungeon.rooms.secret import SecretRoom
+            target_is_secret = isinstance(target, SecretRoom)
+            for _ in range(20):
+                curr = self.rng.choice(branchable)
+                if not (target_is_secret and isinstance(curr, ConnectionRoom)):
+                    break
+            else:
+                curr = self.rng.choice(branchable)
 
             n_tunnels = _weighted_choice(self.rng, conn_pool)
             if n_tunnels == -1:
@@ -146,7 +155,9 @@ class RegularBuilder(Builder):
             placed_tunnels: List[Room] = []
             ok = True
             for _ in range(n_tunnels):
-                tunnel = TunnelRoom()
+                # SecretRoom's connection chain uses MazeConnectionRoom so the
+                # whole branch reads as a maze rather than a regular corridor.
+                tunnel = MazeConnectionRoom() if target_is_secret else TunnelRoom()
                 angle = -1.0
                 for _try in range(3):
                     angle = Builder.place_room(self.rng, rooms, curr, tunnel,
