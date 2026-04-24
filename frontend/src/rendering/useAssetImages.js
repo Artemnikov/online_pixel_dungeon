@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
 
 import sewerTiles from '../assets/pixel-dungeon/environment/tiles_sewers.png';
+import prisonTiles from '../assets/pixel-dungeon/environment/tiles_prison.png';
+import cavesTiles from '../assets/pixel-dungeon/environment/tiles_caves.png';
+import cityTiles from '../assets/pixel-dungeon/environment/tiles_city.png';
+import hallsTiles from '../assets/pixel-dungeon/environment/tiles_halls.png';
 import water0 from '../assets/pixel-dungeon/environment/water0.png';
 import water1 from '../assets/pixel-dungeon/environment/water1.png';
 import water2 from '../assets/pixel-dungeon/environment/water2.png';
@@ -19,7 +23,14 @@ import scorpioSprite from '../assets/pixel-dungeon/sprites/scorpio.png';
 
 export default function useAssetImages() {
   const [assetImages, setAssetImages] = useState({
-    tiles: null,
+    tiles: null,           // sewers (default + back-compat)
+    tilesByRegion: {       // SPD-style atlas per biome
+      sewers: null,
+      prison: null,
+      caves: null,
+      city: null,
+      halls: null,
+    },
     waterFrames: [null, null, null, null, null],
     warrior: null,
     mage: null,
@@ -56,7 +67,23 @@ export default function useAssetImages() {
       });
     };
 
-    loadImage(sewerTiles, 'tiles');
+    const loadRegionTiles = (src, regionKey) => {
+      loadImage(src, null, (img) => {
+        setAssetImages(prev => ({
+          ...prev,
+          tilesByRegion: { ...prev.tilesByRegion, [regionKey]: img },
+          // Keep legacy `tiles` pointing at sewers so existing callers
+          // that haven't migrated yet still work.
+          ...(regionKey === 'sewers' ? { tiles: img } : {}),
+        }));
+      });
+    };
+
+    loadRegionTiles(sewerTiles, 'sewers');
+    loadRegionTiles(prisonTiles, 'prison');
+    loadRegionTiles(cavesTiles, 'caves');
+    loadRegionTiles(cityTiles, 'city');
+    loadRegionTiles(hallsTiles, 'halls');
     loadWaterFrame(water0, 0);
     loadWaterFrame(water1, 1);
     loadWaterFrame(water2, 2);

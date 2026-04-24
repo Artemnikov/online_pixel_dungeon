@@ -1,9 +1,12 @@
 import { TILE_SIZE } from '../../constants';
 import { drawSpriteTile, fallbackTileMap } from '../sprites';
 import { drawSewerTile } from '../sewers/draw';
+import { tilesForDepth } from '../regions';
 
 export function drawGrid(ctx, { grid, depth, assetImages, visionRef, openDoorsRef }) {
-  const useSewerTiles = depth <= 5;
+  // SPD tile-sheets share the same atlas layout per region — pick the
+  // right PNG for this depth, then run the same autotiler pipeline.
+  const regionTiles = tilesForDepth(assetImages, depth);
 
   for (let y = 0; y < grid.length; y++) {
     for (let x = 0; x < grid[y].length; x++) {
@@ -26,10 +29,10 @@ export function drawGrid(ctx, { grid, depth, assetImages, visionRef, openDoorsRe
 
       let tileDrawn = false;
 
-      if (useSewerTiles && assetImages.tiles) {
+      if (regionTiles) {
         tileDrawn = drawSewerTile(
           ctx,
-          assetImages.tiles,
+          regionTiles,
           grid,
           x,
           y,
@@ -40,8 +43,8 @@ export function drawGrid(ctx, { grid, depth, assetImages, visionRef, openDoorsRe
 
       if (!tileDrawn) {
         const tileCoords = fallbackTileMap[tile];
-        if (tileCoords && assetImages.tiles) {
-          drawSpriteTile(ctx, assetImages.tiles, tileCoords, x, y);
+        if (tileCoords && regionTiles) {
+          drawSpriteTile(ctx, regionTiles, tileCoords, x, y);
           tileDrawn = true;
         }
       }
