@@ -1,77 +1,218 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { getSewerWallInstructions, getWallMask } from './wallMapper.js';
-import { BACKEND_TILE, QUADRANT, WALL_INDEX } from './constants.js';
+import {
+  getInternalWallTop,
+  getRaisedWallFace,
+  getSewerCap,
+  getSewerWallInstructions,
+  getWallOverhang,
+} from './wallMapper.js';
+import { BACKEND_TILE, WALL_INDEX } from './constants.js';
 
-const blank = () => Array.from({ length: 5 }, () => Array.from({ length: 5 }, () => BACKEND_TILE.FLOOR.id));
+const W = BACKEND_TILE.WALL.id;
+const F = BACKEND_TILE.FLOOR.id;
+const D = BACKEND_TILE.DOOR.id;
+const LD = BACKEND_TILE.LOCKED_DOOR.id;
+const WD = BACKEND_TILE.WALL_DECO.id;
 
-test('wall bitmask uses NESW bit order', () => {
-  const grid = blank();
-  grid[2][2] = BACKEND_TILE.WALL.id;
-  grid[1][2] = BACKEND_TILE.WALL.id; // N
-  grid[2][3] = BACKEND_TILE.WALL.id; // E
-  grid[3][2] = BACKEND_TILE.WALL.id; // S
+// Compact grid helper: rows top→bottom, cols left→right.
+const g = (...rows) => rows;
 
-  assert.equal(getWallMask(grid, 2, 2), 1 | 2 | 4);
+test('getRaisedWallFace — wall with floor below + walls on both sides = solid face', () => {
+  const grid = g(
+    [W, W, W],
+    [W, W, W],
+    [F, F, F],
+  );
+  // Cell (1, 1): wall; below (1, 2) = floor; left (0, 1) and right (2, 1) = walls.
+  // Mask: right is wallStitcheable (no +1), left is wallStitcheable (no +2) → mask=0 (solid).
+  const got = getRaisedWallFace(grid, 1, 1, W);
+  // Must be one of the two alts (base or alt row) at mask=0.
+  assert.ok(got === WALL_INDEX.RAISED_WALL || got === WALL_INDEX.RAISED_WALL_ALT,
+    `expected RAISED_WALL or _ALT (solid, mask=0), got ${got}`);
 });
 
-test('single wall tile renders wall top + face + stitches', () => {
-  const grid = blank();
-  grid[2][2] = BACKEND_TILE.WALL.id;
-
-  const instructions = getSewerWallInstructions(grid, 2, 2);
-
-  assert.ok(instructions.some((item) => WALL_INDEX.TOP.includes(item.srcIndex)));
-  assert.ok(instructions.some((item) => WALL_INDEX.FACE_OPEN_BOTH.includes(item.srcIndex)));
-  assert.ok(instructions.some((item) => item.quadrant === QUADRANT.TL));
-  assert.ok(instructions.some((item) => item.quadrant === QUADRANT.TR));
+test('getRaisedWallFace — wall with floor below + open to the right only = mask+1', () => {
+  const grid = g(
+    [W, W, F],
+    [W, W, F],
+    [F, F, F],
+  );
+  // Cell (1, 1): wall. Right (2, 1) = floor (open right). Left (0, 1) = wall.
+  // Mask: +1 (right open), +0 (left closed) → mask = 1.
+  const got = getRaisedWallFace(grid, 1, 1, W);
+  assert.ok(
+    got === WALL_INDEX.RAISED_WALL + 1 || got === WALL_INDEX.RAISED_WALL_ALT + 1,
+    `expected RAISED_WALL+1 or _ALT+1 (open-right), got ${got}`,
+  );
 });
 
-test('wall with wall below omits raised face', () => {
-  const grid = blank();
-  grid[2][2] = BACKEND_TILE.WALL.id;
-  grid[3][2] = BACKEND_TILE.WALL.id;
+test('getRaisedWallFace — wall with wall below returns null (cap comes from below-pass)', () => {
+  const grid = g(
+    [W, W, W],
+    [W, W, W],
+    [W, W, W],
+  );
+  // Cell (1, 1) has a wall below at (1, 2) → no face should be drawn here.
+  assert.equal(getRaisedWallFace(grid, 1, 1, W), null);
+});
 
-  const instructions = getSewerWallInstructions(grid, 2, 2);
+test('getRaisedWallFace — wall above a door gets the RAISED_WALL_DOOR sprite', () => {
+  const grid = g(
+    [W, W, W],
+    [W, W, W],
+    [F, D, F],
+  );
+  // Cell (1, 1) has a DOOR directly below at (1, 2).
+  assert.equal(getRaisedWallFace(grid, 1, 1, W), WALL_INDEX.RAISED_WALL_DOOR);
+});
 
+test('getInternalWallTop — fully surrounded wall returns mask=0', () => {
+  const grid = g(
+    [W, W, W],
+    [W, W, W],
+    [W, W, W],
+  );
+  // Cell (1, 1): every 4-neighbour (right, rightBelow, leftBelow, left) is a wall.
+  assert.equal(getInternalWallTop(grid, 1, 1, W), WALL_INDEX.WALL_INTERNAL);
+});
+
+test('getInternalWallTop — isolated wall with all four corners open = mask 1|2|4|8 = 15', () => {
+  const grid = g(
+    [W, W, W],
+    [F, W, F],
+    [F, F, F],
+  );
+  // Cell (1, 1): right (2,1)=F(+1), rightBelow (2,2)=F(+2), leftBelow (0,2)=F(+4), left (0,1)=F(+8).
+  assert.equal(getInternalWallTop(grid, 1, 1, W), WALL_INDEX.WALL_INTERNAL + 15);
+});
+
+test('getInternalWallTop — WALL_DECO uses the DECO variant row', () => {
+  const grid = g(
+    [WD, WD, WD],
+    [WD, WD, WD],
+    [WD, WD, WD],
+  );
+  assert.equal(getInternalWallTop(grid, 1, 1, WD), WALL_INDEX.WALL_INTERNAL_DECO);
+});
+
+test('getWallOverhang — floor above wall, both below-diagonals are wall = mask 0', () => {
+  const grid = g(
+    [F, F, F],
+    [F, F, F],
+    [W, W, W],
+  );
+  // Cell (1, 1): below (1,2)=W, rightBelow (2,2)=W(no+1), leftBelow (0,2)=W(no+2) → mask=0.
+  assert.equal(getWallOverhang(grid, 1, 1), WALL_INDEX.WALL_OVERHANG);
+});
+
+test('getWallOverhang — floor above wall, both below-diagonals non-wall = mask 3', () => {
+  const grid = g(
+    [F, F, F],
+    [F, F, F],
+    [F, W, F],
+  );
+  // Below (1,2)=W. rightBelow (2,2)=F (+1). leftBelow (0,2)=F (+2). Mask = 3.
+  assert.equal(getWallOverhang(grid, 1, 1), WALL_INDEX.WALL_OVERHANG + 3);
+});
+
+test('getSewerCap — wall with wall below returns WALL_INTERNAL', () => {
+  const grid = g(
+    [W, W, W],
+    [W, W, W],
+    [W, W, W],
+  );
+  assert.equal(getSewerCap(grid, 1, 1, W, new Set()), WALL_INDEX.WALL_INTERNAL);
+});
+
+test('getSewerCap — floor with wall below returns WALL_OVERHANG', () => {
+  const grid = g(
+    [F, F, F],
+    [F, F, F],
+    [W, W, W],
+  );
+  assert.equal(getSewerCap(grid, 1, 1, F, new Set()), WALL_INDEX.WALL_OVERHANG);
+});
+
+test('getSewerCap — floor with floor below returns null', () => {
+  const grid = g(
+    [F, F, F],
+    [F, F, F],
+    [F, F, F],
+  );
+  assert.equal(getSewerCap(grid, 1, 1, F, new Set()), null);
+});
+
+test('getSewerCap — floor with closed door below returns DOOR_OVERHANG', () => {
+  const grid = g(
+    [F, F, F],
+    [F, F, F],
+    [F, D, F],
+  );
   assert.equal(
-    instructions.some((item) =>
-      WALL_INDEX.FACE_SOLID.includes(item.srcIndex) ||
-      WALL_INDEX.FACE_OPEN_LEFT.includes(item.srcIndex) ||
-      WALL_INDEX.FACE_OPEN_RIGHT.includes(item.srcIndex) ||
-      WALL_INDEX.FACE_OPEN_BOTH.includes(item.srcIndex)
-    ),
-    false
+    getSewerCap(grid, 1, 1, F, new Set()),
+    WALL_INDEX.DOOR_OVERHANG,
   );
 });
 
-test('WALL_DECO substitutes drain sprite for the wall top layer', () => {
-  const grid = blank();
-  grid[2][2] = BACKEND_TILE.WALL_DECO.id;
-
-  const instructions = getSewerWallInstructions(grid, 2, 2);
-
-  const topLayer = instructions[0];
-  assert.ok(
-    WALL_INDEX.DECO.includes(topLayer.srcIndex),
-    `expected top layer to be a DECO sprite, got ${topLayer.srcIndex}`
+test('getSewerCap — floor with an OPEN door below returns DOOR_OVERHANG_OPEN', () => {
+  const grid = g(
+    [F, F, F],
+    [F, F, F],
+    [F, D, F],
   );
-  assert.ok(
-    !WALL_INDEX.TOP.includes(topLayer.srcIndex),
-    'top layer must not be the plain TOP sprite when tile is WALL_DECO'
+  // openDoors keys the door position "1,2".
+  const openDoors = new Set(['1,2']);
+  assert.equal(
+    getSewerCap(grid, 1, 1, F, openDoors),
+    WALL_INDEX.DOOR_OVERHANG_OPEN,
   );
 });
 
-test('SECRET_DOOR uses plain TOP sprite via wallMapper', () => {
-  const grid = blank();
-  grid[2][2] = BACKEND_TILE.SECRET_DOOR.id;
-
-  const instructions = getSewerWallInstructions(grid, 2, 2);
-
-  const topLayer = instructions[0];
-  assert.ok(
-    WALL_INDEX.TOP.includes(topLayer.srcIndex),
-    'SECRET_DOOR should render with plain TOP sprite so it looks like a wall'
+test('getSewerCap — wall above a locked door returns DOOR_SIDEWAYS_LOCKED', () => {
+  const grid = g(
+    [W, W, W],
+    [W, W, W],
+    [W, LD, W],
   );
+  assert.equal(
+    getSewerCap(grid, 1, 1, W, new Set()),
+    WALL_INDEX.DOOR_SIDEWAYS_LOCKED,
+  );
+});
+
+test('getSewerWallInstructions — wall above floor returns a raised-face instruction', () => {
+  const grid = g(
+    [W, W, W],
+    [W, W, W],
+    [F, F, F],
+  );
+  const out = getSewerWallInstructions(grid, 1, 1);
+  assert.equal(out.length, 1);
+  // At mask=0 the returned index is RAISED_WALL or its alt row.
+  assert.ok(
+    out[0].srcIndex === WALL_INDEX.RAISED_WALL
+      || out[0].srcIndex === WALL_INDEX.RAISED_WALL_ALT,
+  );
+});
+
+test('getSewerWallInstructions — wall above wall returns an internal-top instruction', () => {
+  const grid = g(
+    [W, W, W],
+    [W, W, W],
+    [W, W, W],
+  );
+  const out = getSewerWallInstructions(grid, 1, 1);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].srcIndex, WALL_INDEX.WALL_INTERNAL);
+});
+
+test('getSewerWallInstructions — non-wall tile returns empty list', () => {
+  const grid = g(
+    [F, F, F],
+    [F, F, F],
+    [F, F, F],
+  );
+  assert.deepEqual(getSewerWallInstructions(grid, 1, 1), []);
 });

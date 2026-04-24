@@ -1,66 +1,195 @@
-import { BACKEND_TILE, QUADRANT, WALL_INDEX, hashCell, isWallTile } from './constants.js';
+/*
+ * SPD-style wall rendering.
+ *
+ * SPD uses TWO layers to draw walls with a 3D look:
+ *
+ *   1. Terrain layer — at the wall's own grid cell:
+ *      - If the cell BELOW is non-wall: draw the RAISED_WALL front face
+ *        (the vertical brick panel you see from in front of the wall).
+ *      - If the cell below is also a wall: draw NOTHING here; the wall top
+ *        will be drawn in the cell above via the overhang rule.
+ *
+ *   2. Walls layer — caps drawn on top of the terrain layer:
+ *      - A wall cell whose below is also a wall gets a WALL_INTERNAL top
+ *        (a top-down wall-surface tile stitched with 4-neighbour masks).
+ *      - A FLOOR cell whose below is a wall gets a WALL_OVERHANG cap
+ *        (top half: wall-top surface; bottom half: shadow bleeding into
+ *        the floor — that's how SPD gets the visual depth).
+ *      - Door cases are special-cased (sideways door on a vertical wall
+ *        gets DOOR_SIDEWAYS_OVERHANG; a door on a horizontal wall gets
+ *        DOOR_OVERHANG drawn in the floor cell above).
+ *
+ * This module emits both layers as a single ordered instruction list
+ * per cell; drawSewerTile concatenates it onto any terrain base.
+ */
+
+import {
+  BACKEND_TILE,
+  QUADRANT,
+  WALL_INDEX,
+  hashCell,
+  isDoorTile,
+  isWallStitcheable,
+  isWallTile,
+} from './constants.js';
 
 const getTile = (grid, x, y) => {
-  if (y < 0 || y >= grid.length) return BACKEND_TILE.VOID.id;
-  if (x < 0 || x >= grid[y].length) return BACKEND_TILE.VOID.id;
+  if (y < 0 || y >= grid.length) return -1;
+  if (x < 0 || x >= grid[y].length) return -1;
   return grid[y][x];
 };
 
-export const getWallMask = (grid, x, y) => {
+const pickAlt = (base, altBase, x, y) =>
+  (hashCell(x, y) & 1) ? altBase : base;
+
+/**
+ * Returns the RAISED_WALL front-face sprite for a wall cell whose below is
+ * non-wall. Returns null if this wall cell should NOT render a front face
+ * (because below is also a wall — the cap will come from elsewhere).
+ *
+ * Mirrors SPD DungeonTileSheet.getRaisedWallTile.
+ */
+export const getRaisedWallFace = (grid, x, y, tile) => {
+  const below = getTile(grid, x, y + 1);
+  if (isWallStitcheable(below)) return null;
+
+  // Wall directly above a door → special wall-with-doorway-inside sprite.
+  if (isDoorTile(below)) return WALL_INDEX.RAISED_WALL_DOOR;
+
+  const right = getTile(grid, x + 1, y);
+  const left = getTile(grid, x - 1, y);
+
+  const base = tile === BACKEND_TILE.WALL_DECO.id
+    ? pickAlt(WALL_INDEX.RAISED_WALL_DECO, WALL_INDEX.RAISED_WALL_DECO_ALT, x, y)
+    : pickAlt(WALL_INDEX.RAISED_WALL, WALL_INDEX.RAISED_WALL_ALT, x, y);
+
   let mask = 0;
-  if (isWallTile(getTile(grid, x, y - 1))) mask |= 1;
-  if (isWallTile(getTile(grid, x + 1, y))) mask |= 2;
-  if (isWallTile(getTile(grid, x, y + 1))) mask |= 4;
-  if (isWallTile(getTile(grid, x - 1, y))) mask |= 8;
-  return mask;
+  if (!isWallStitcheable(right)) mask += 1;  // open to the right
+  if (!isWallStitcheable(left)) mask += 2;   // open to the left
+  return base + mask;
 };
 
+/**
+ * Returns the internal wall-top sprite for a wall cell whose below is
+ * also a wall. 4-bit mask based on right / right-below / left-below / left
+ * neighbours being non-wall.
+ *
+ * Mirrors SPD DungeonTileSheet.stitchInternalWallTile.
+ */
+export const getInternalWallTop = (grid, x, y, tile) => {
+  const right = getTile(grid, x + 1, y);
+  const rightBelow = getTile(grid, x + 1, y + 1);
+  const leftBelow = getTile(grid, x - 1, y + 1);
+  const left = getTile(grid, x - 1, y);
+
+  const base = tile === BACKEND_TILE.WALL_DECO.id
+    ? WALL_INDEX.WALL_INTERNAL_DECO
+    : WALL_INDEX.WALL_INTERNAL;
+
+  let mask = 0;
+  if (!isWallStitcheable(right))      mask += 1;
+  if (!isWallStitcheable(rightBelow)) mask += 2;
+  if (!isWallStitcheable(leftBelow))  mask += 4;
+  if (!isWallStitcheable(left))       mask += 8;
+  return base + mask;
+};
+
+/**
+ * Returns the wall-overhang cap for a non-wall cell whose below IS a wall.
+ * The sprite art has the wall-top surface on the upper half and a shadow
+ * fading into alpha on the lower half — together with the floor drawn
+ * underneath this instruction, it gives the 3D depth effect.
+ *
+ * Mirrors SPD DungeonTileSheet.stitchWallOverhangTile for the plain-wall
+ * path. 2-bit mask based on rightBelow / leftBelow being non-wall.
+ */
+export const getWallOverhang = (grid, x, y) => {
+  const below = getTile(grid, x, y + 1);
+  const rightBelow = getTile(grid, x + 1, y + 1);
+  const leftBelow = getTile(grid, x - 1, y + 1);
+
+  const base = below === BACKEND_TILE.WALL_DECO.id
+    ? WALL_INDEX.WALL_OVERHANG_DECO
+    : WALL_INDEX.WALL_OVERHANG;
+
+  let mask = 0;
+  if (!isWallStitcheable(rightBelow)) mask += 1;
+  if (!isWallStitcheable(leftBelow))  mask += 2;
+  return base + mask;
+};
+
+/**
+ * Returns the sideway-door overhang for a non-wall cell above a vertical
+ * door (door between two walls running up-down). Differs from the
+ * horizontal door overhang (see getDoorOverhang).
+ *
+ * Mirrors the DOOR_SIDEWAYS_OVERHANG* branches in
+ * SPD DungeonTileSheet.stitchWallOverhangTile.
+ */
+export const getDoorSidewaysOverhang = (grid, x, y) => {
+  const below = getTile(grid, x, y + 1);
+  const rightBelow = getTile(grid, x + 1, y + 1);
+  const leftBelow = getTile(grid, x - 1, y + 1);
+
+  const base = below === BACKEND_TILE.LOCKED_DOOR.id
+    ? WALL_INDEX.DOOR_SIDEWAYS_OVERHANG_LOCKED
+    : WALL_INDEX.DOOR_SIDEWAYS_OVERHANG_CLOSED;
+
+  let mask = 0;
+  if (!isWallStitcheable(rightBelow)) mask += 1;
+  if (!isWallStitcheable(leftBelow))  mask += 2;
+  return base + mask;
+};
+
+/**
+ * Returns the cap/overhang sprite for a cell, based on what's directly
+ * below it. Null if no cap is needed. `openDoorsRef` is a Set of "x,y"
+ * strings of doors currently in the open state.
+ */
+export const getSewerCap = (grid, x, y, tile, openDoors) => {
+  const below = getTile(grid, x, y + 1);
+
+  if (isWallStitcheable(below)) {
+    if (isWallTile(tile)) {
+      return getInternalWallTop(grid, x, y, tile);
+    }
+    return getWallOverhang(grid, x, y);
+  }
+
+  if (isDoorTile(below)) {
+    // Door directly below this cell.
+    if (isWallTile(tile)) {
+      // Wall above a door — the vertical-wall sideway cap.
+      return below === BACKEND_TILE.LOCKED_DOOR.id
+        ? WALL_INDEX.DOOR_SIDEWAYS_LOCKED
+        : WALL_INDEX.DOOR_SIDEWAYS;
+    }
+    // Floor above a door — the door-top cap sprite.
+    const isOpen = openDoors?.has(`${x},${y + 1}`);
+    return isOpen ? WALL_INDEX.DOOR_OVERHANG_OPEN : WALL_INDEX.DOOR_OVERHANG;
+  }
+
+  return null;
+};
+
+/**
+ * Primary entry point. Returns the base-layer instructions for a wall
+ * cell: either the raised front face, the internal wall top, or empty
+ * (when the cell's content will entirely come from a cap drawn here).
+ */
 export const getSewerWallInstructions = (grid, x, y) => {
   const tile = getTile(grid, x, y);
   if (!isWallTile(tile)) return [];
 
-  const variant = hashCell(x, y) % WALL_INDEX.TOP.length;
-  const mask = getWallMask(grid, x, y);
+  const below = getTile(grid, x, y + 1);
 
-  const hasNorth = (mask & 1) !== 0;
-  const hasEast = (mask & 2) !== 0;
-  const hasSouth = (mask & 4) !== 0;
-  const hasWest = (mask & 8) !== 0;
-
-  const topSprite = tile === BACKEND_TILE.WALL_DECO.id
-    ? WALL_INDEX.DECO[variant % WALL_INDEX.DECO.length]
-    : WALL_INDEX.TOP[variant];
-  const instructions = [{ srcIndex: topSprite, quadrant: QUADRANT.FULL }];
-
-  if (!hasSouth) {
-    let face = WALL_INDEX.FACE_SOLID[variant];
-    if (!hasEast && !hasWest) {
-      face = WALL_INDEX.FACE_OPEN_BOTH[variant];
-    } else if (!hasWest) {
-      face = WALL_INDEX.FACE_OPEN_LEFT[variant];
-    } else if (!hasEast) {
-      face = WALL_INDEX.FACE_OPEN_RIGHT[variant];
-    }
-    instructions.push({ srcIndex: face, quadrant: QUADRANT.FULL });
+  // Wall with non-wall below → raised front face.
+  if (!isWallStitcheable(below)) {
+    const face = getRaisedWallFace(grid, x, y, tile);
+    if (face == null) return [];
+    return [{ srcIndex: face, quadrant: QUADRANT.FULL }];
   }
 
-  if (!hasNorth) {
-    instructions.push({ srcIndex: WALL_INDEX.STITCH_TOP[variant], quadrant: QUADRANT.FULL, alpha: 0.85 });
-  }
-  if (!hasWest) {
-    instructions.push({ srcIndex: WALL_INDEX.STITCH_LEFT[variant], quadrant: QUADRANT.TL, alpha: 0.85 });
-    instructions.push({ srcIndex: WALL_INDEX.STITCH_LEFT[variant], quadrant: QUADRANT.BL, alpha: 0.85 });
-  }
-  if (!hasEast) {
-    instructions.push({ srcIndex: WALL_INDEX.STITCH_RIGHT[variant], quadrant: QUADRANT.TR, alpha: 0.85 });
-    instructions.push({ srcIndex: WALL_INDEX.STITCH_RIGHT[variant], quadrant: QUADRANT.BR, alpha: 0.85 });
-  }
-  if (hasSouth && !hasWest) {
-    instructions.push({ srcIndex: WALL_INDEX.STITCH_BOTTOM[variant], quadrant: QUADRANT.BL, alpha: 0.8 });
-  }
-  if (hasSouth && !hasEast) {
-    instructions.push({ srcIndex: WALL_INDEX.STITCH_BOTTOM[variant], quadrant: QUADRANT.BR, alpha: 0.8 });
-  }
-
-  return instructions;
+  // Wall with wall below → internal wall-top cap goes here.
+  return [{ srcIndex: getInternalWallTop(grid, x, y, tile), quadrant: QUADRANT.FULL }];
 };

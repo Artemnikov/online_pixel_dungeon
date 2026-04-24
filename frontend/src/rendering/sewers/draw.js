@@ -7,7 +7,7 @@ import {
   WATER_SCROLL_PX_PER_SEC,
 } from './constants.js';
 import { getSewerTerrainInstructions } from './terrainMapper.js';
-import { getSewerWallInstructions } from './wallMapper.js';
+import { getSewerCap, getSewerWallInstructions } from './wallMapper.js';
 
 const HALF_SOURCE = SOURCE_TILE_SIZE / 2;
 const HALF_DEST = DEST_TILE_SIZE / 2;
@@ -167,12 +167,23 @@ export const drawWaterBackground = (ctx, waterTex, clipPath, bounds, nowMs) => {
 };
 
 export const drawSewerTile = (ctx, atlasImage, grid, x, y, tile, openDoors = new Set()) => {
-  const useWallMapper = tile === BACKEND_TILE.WALL.id
+  const isWall = tile === BACKEND_TILE.WALL.id
     || tile === BACKEND_TILE.WALL_DECO.id
     || tile === BACKEND_TILE.SECRET_DOOR.id;
-  const instructions = useWallMapper
+
+  // SPD's two-layer wall model:
+  //   base = RAISED_WALL face (wall above floor) or WALL_INTERNAL (wall surrounded by walls)
+  //          OR the normal terrain (floor/grass/water/door) for non-wall cells.
+  //   cap  = WALL_OVERHANG / DOOR_OVERHANG drawn on top when this cell's BELOW
+  //          is a wall or door. Gives the 3D shadow + stitching.
+  const instructions = isWall
     ? getSewerWallInstructions(grid, x, y)
     : getSewerTerrainInstructions(grid, x, y, tile, openDoors);
+
+  const cap = getSewerCap(grid, x, y, tile, openDoors);
+  if (cap != null) {
+    instructions.push({ srcIndex: cap, quadrant: QUADRANT.FULL });
+  }
 
   const isWater = tile === BACKEND_TILE.FLOOR_WATER.id;
   if (instructions.length === 0 && !isWater) return false;

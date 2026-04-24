@@ -3,10 +3,8 @@ import {
   QUADRANT,
   QUADRANT_NEIGHBORS,
   TERRAIN_INDEX,
-  WALL_INDEX,
   hashCell,
   isGrassTile,
-  isWallTile,
   isWaterTile,
 } from './constants.js';
 
@@ -78,21 +76,13 @@ export const getSewerTerrainInstructions = (grid, x, y, tile, openDoors = new Se
   }
 
   if (tile === BACKEND_TILE.DOOR.id || tile === BACKEND_TILE.LOCKED_DOOR.id) {
+    // The door sprite itself. The wall-side stitching around the door is
+    // now handled by wallMapper.getSewerCap as DOOR_SIDEWAYS / DOOR_OVERHANG
+    // from the adjacent wall cells — no longer overlaid here.
     const base = tile === BACKEND_TILE.LOCKED_DOOR.id
       ? BACKEND_TILE.LOCKED_DOOR
       : (openDoors.has(`${x},${y}`) ? BACKEND_TILE.OPEN_DOOR : BACKEND_TILE.DOOR);
-    const instructions = [tileInstr(base)];
-    const westIsWall = isWallTile(getTile(grid, x - 1, y));
-    const eastIsWall = isWallTile(getTile(grid, x + 1, y));
-    if (westIsWall && !eastIsWall) {
-      instructions.push({ srcIndex: WALL_INDEX.STITCH_LEFT[0], quadrant: QUADRANT.TL, alpha: 0.85 });
-      instructions.push({ srcIndex: WALL_INDEX.STITCH_LEFT[0], quadrant: QUADRANT.BL, alpha: 0.85 });
-    }
-    if (eastIsWall && !westIsWall) {
-      instructions.push({ srcIndex: WALL_INDEX.STITCH_RIGHT[0], quadrant: QUADRANT.TR, alpha: 0.85 });
-      instructions.push({ srcIndex: WALL_INDEX.STITCH_RIGHT[0], quadrant: QUADRANT.BR, alpha: 0.85 });
-    }
-    return instructions;
+    return [tileInstr(base)];
   }
 
   if (tile === BACKEND_TILE.FLOOR_WATER.id) {
