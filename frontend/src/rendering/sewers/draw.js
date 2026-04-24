@@ -179,9 +179,11 @@ export const drawSewerTile = (ctx, atlasImage, grid, x, y, tile, openDoors = new
 
   drawInstructions(ctx, atlasImage, instructions, x, y);
 
-  const dx = x * DEST_TILE_SIZE;
-  const dy = y * DEST_TILE_SIZE;
-  if (true) {
+  // Tile-ID overlay for debugging. Off by default; set
+  // `window.__debugTileIds = true` in the console to enable.
+  if (typeof window !== 'undefined' && window.__debugTileIds) {
+    const dx = x * DEST_TILE_SIZE;
+    const dy = y * DEST_TILE_SIZE;
     ctx.save();
     ctx.font = 'bold 8px monospace';
     ctx.fillStyle = 'black';
