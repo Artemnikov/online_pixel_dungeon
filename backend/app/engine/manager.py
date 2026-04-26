@@ -1020,11 +1020,13 @@ class GameInstance:
                 return True
 
             if 0 <= curr_x < self.width and 0 <= curr_y < self.height:
-                tile = floor.grid[curr_y][curr_x]
-                if floor.flags and floor.flags.los_blocking[curr_y][curr_x]:
-                    return False
-                if tile == TileType.DOOR and not self._is_door_open(floor, curr_x, curr_y):
-                    return False
+                if not (curr_x == x1 and curr_y == y1):
+                    tile = floor.grid[curr_y][curr_x]
+                    if tile == TileType.DOOR:
+                        if not self._is_door_open(floor, curr_x, curr_y):
+                            return False
+                    elif floor.flags and floor.flags.los_blocking[curr_y][curr_x]:
+                        return False
 
             e2 = 2 * err
             if e2 >= dy:
