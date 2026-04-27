@@ -115,7 +115,7 @@ export default function useGameRenderer({
       drawItems(ctx, { entitiesRef, visionRef, assetImages });
       drawMobs(ctx, { entitiesRef, visionRef, assetImages, mobAnimRef, dyingMobsRef });
       drawPlayers(ctx, { entitiesRef, visionRef, assetImages, myPlayerId });
-      drawGridCaps(ctx, { grid, depth, assetImages, visionRef, openDoorsRef });
+      drawGridCaps(ctx, { grid, depth, assetImages, visionRef });
       advanceAndDrawProjectiles(ctx, { projectilesRef });
 
       ctx.restore();

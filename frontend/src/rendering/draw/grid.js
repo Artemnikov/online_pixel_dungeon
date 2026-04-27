@@ -72,10 +72,11 @@ export function drawGrid(ctx, { grid, depth, assetImages, visionRef, openDoorsRe
   }
 }
 
-// Second pass: wall + door overhangs drawn AFTER items / mobs / players so
-// chars are partially obscured by the wall top, mirroring SPD's
-// DungeonWallsTilemap (added after the mobs group in GameScene).
-export function drawGridCaps(ctx, { grid, depth, assetImages, visionRef, openDoorsRef }) {
+// Second pass: wall overhangs drawn AFTER items / mobs / players so chars
+// are partially obscured by the wall top, mirroring the upper half of SPD's
+// DungeonWallsTilemap. Door caps live in the base pass (drawSewerTileBase)
+// so doors never obscure chars.
+export function drawGridCaps(ctx, { grid, depth, assetImages, visionRef }) {
   const regionTiles = tilesForDepth(assetImages, depth);
   if (!regionTiles) return;
 
@@ -87,15 +88,7 @@ export function drawGridCaps(ctx, { grid, depth, assetImages, visionRef, openDoo
       const key = `${x},${y}`;
       if (!visionRef.current.discovered.has(key)) continue;
 
-      const drew = drawSewerTileCap(
-        ctx,
-        regionTiles,
-        grid,
-        x,
-        y,
-        tile,
-        openDoorsRef.current
-      );
+      const drew = drawSewerTileCap(ctx, regionTiles, grid, x, y, tile);
       if (!drew) continue;
 
       if (!visionRef.current.visible.has(key)) dimCell(ctx, x, y);

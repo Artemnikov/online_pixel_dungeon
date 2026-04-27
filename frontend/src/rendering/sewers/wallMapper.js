@@ -20,8 +20,11 @@
  *        DOOR_OVERHANG drawn in the floor cell above).
  *
  * The two passes are emitted by separate functions: drawSewerTileBase
- * (terrain + wall fronts/internals, drawn before entities) and
- * drawSewerTileCap (overhangs, drawn after entities so chars are obscured).
+ * (terrain + wall fronts/internals + ALL door caps, drawn before entities)
+ * and drawSewerTileCap (wall overhangs only, drawn after entities so chars
+ * are obscured by wall tops). Door overhangs deliberately live in the base
+ * pass so doors never obscure characters — a deviation from SPD, which
+ * draws door overhangs in the walls layer.
  */
 
 import {
@@ -148,34 +151,43 @@ export const getDoorSidewaysOverhang = (grid, x, y, tile, openDoors) => {
 };
 
 /**
- * Returns the cap/overhang sprite for a cell, based on what's directly
- * below it. Null if no cap is needed. `openDoorsRef` is a Set of "x,y"
- * strings of doors currently in the open state.
+ * Wall-only cap (WALL_INTERNAL / WALL_OVERHANG). Drawn AFTER entities so
+ * walls partially obscure characters, mirroring the upper portion of SPD's
+ * DungeonWallsTilemap. Door-related caps live in `getSewerDoorCap` and
+ * render in the base pass — characters are never obscured by doors.
  */
-export const getSewerCap = (grid, x, y, tile, openDoors) => {
+export const getSewerCap = (grid, x, y, tile) => {
   const below = getTile(grid, x, y + 1);
 
-  if (isWallStitcheable(below)) {
-    if (isWallTile(tile)) {
-      return getInternalWallTop(grid, x, y, tile);
-    }
-    if (isDoorTile(tile)) {
-      // Side-door cell with a wall below — door-shaped overhang that
-      // blends the door body into the lower wall.
-      return getDoorSidewaysOverhang(grid, x, y, tile, openDoors);
-    }
-    return getWallOverhang(grid, x, y);
+  if (!isWallStitcheable(below)) return null;
+  if (isWallTile(tile)) return getInternalWallTop(grid, x, y, tile);
+  if (isDoorTile(tile)) return null;
+  return getWallOverhang(grid, x, y);
+};
+
+/**
+ * Door-only cap. Drawn in the base pass (BEFORE entities), so a character
+ * standing on a door cell or in the floor cell above a door always renders
+ * on top of the door art. `openDoors` is a Set of "x,y" strings of doors
+ * currently in the open state.
+ */
+export const getSewerDoorCap = (grid, x, y, tile, openDoors) => {
+  const below = getTile(grid, x, y + 1);
+
+  // Side-door cell with a wall below — door-shaped overhang that
+  // blends the door body into the lower wall.
+  if (isWallStitcheable(below) && isDoorTile(tile)) {
+    return getDoorSidewaysOverhang(grid, x, y, tile, openDoors);
   }
 
   if (isDoorTile(below)) {
-    // Door directly below this cell.
     if (isWallTile(tile)) {
-      // Wall above a door — the vertical-wall sideway cap.
+      // Wall above a sideways door — vertical-wall cap with doorway.
       return below === BACKEND_TILE.LOCKED_DOOR.id
         ? WALL_INDEX.DOOR_SIDEWAYS_LOCKED
         : WALL_INDEX.DOOR_SIDEWAYS;
     }
-    // Floor above a door — the door-top cap sprite.
+    // Floor above a top-facing door — the door-top cap sprite.
     const isOpen = openDoors?.has(`${x},${y + 1}`);
     return isOpen ? WALL_INDEX.DOOR_OVERHANG_OPEN : WALL_INDEX.DOOR_OVERHANG;
   }

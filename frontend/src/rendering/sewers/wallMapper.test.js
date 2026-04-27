@@ -5,6 +5,7 @@ import {
   getInternalWallTop,
   getRaisedWallFace,
   getSewerCap,
+  getSewerDoorCap,
   getSewerWallInstructions,
   getWallOverhang,
 } from './wallMapper.js';
@@ -123,7 +124,7 @@ test('getSewerCap — wall with wall below returns WALL_INTERNAL', () => {
     [W, W, W],
     [W, W, W],
   );
-  assert.equal(getSewerCap(grid, 1, 1, W, new Set()), WALL_INDEX.WALL_INTERNAL);
+  assert.equal(getSewerCap(grid, 1, 1, W), WALL_INDEX.WALL_INTERNAL);
 });
 
 test('getSewerCap — floor with wall below returns WALL_OVERHANG', () => {
@@ -132,7 +133,7 @@ test('getSewerCap — floor with wall below returns WALL_OVERHANG', () => {
     [F, F, F],
     [W, W, W],
   );
-  assert.equal(getSewerCap(grid, 1, 1, F, new Set()), WALL_INDEX.WALL_OVERHANG);
+  assert.equal(getSewerCap(grid, 1, 1, F), WALL_INDEX.WALL_OVERHANG);
 });
 
 test('getSewerCap — floor with floor below returns null', () => {
@@ -141,36 +142,62 @@ test('getSewerCap — floor with floor below returns null', () => {
     [F, F, F],
     [F, F, F],
   );
-  assert.equal(getSewerCap(grid, 1, 1, F, new Set()), null);
+  assert.equal(getSewerCap(grid, 1, 1, F), null);
 });
 
-test('getSewerCap — floor with closed door below returns DOOR_OVERHANG', () => {
+test('getSewerCap — floor with door below returns null (door caps live in base pass)', () => {
+  const grid = g(
+    [F, F, F],
+    [F, F, F],
+    [F, D, F],
+  );
+  assert.equal(getSewerCap(grid, 1, 1, F), null);
+});
+
+test('getSewerCap — side-door cell with wall below returns null (door caps live in base pass)', () => {
+  const grid = g(
+    [W, W, W],
+    [F, D, F],
+    [W, W, W],
+  );
+  assert.equal(getSewerCap(grid, 1, 1, D), null);
+});
+
+test('getSewerCap — wall above a door returns null (door caps live in base pass)', () => {
+  const grid = g(
+    [W, W, W],
+    [W, W, W],
+    [W, LD, W],
+  );
+  assert.equal(getSewerCap(grid, 1, 1, W), null);
+});
+
+test('getSewerDoorCap — floor with closed door below returns DOOR_OVERHANG', () => {
   const grid = g(
     [F, F, F],
     [F, F, F],
     [F, D, F],
   );
   assert.equal(
-    getSewerCap(grid, 1, 1, F, new Set()),
+    getSewerDoorCap(grid, 1, 1, F, new Set()),
     WALL_INDEX.DOOR_OVERHANG,
   );
 });
 
-test('getSewerCap — floor with an OPEN door below returns DOOR_OVERHANG_OPEN', () => {
+test('getSewerDoorCap — floor with an OPEN door below returns DOOR_OVERHANG_OPEN', () => {
   const grid = g(
     [F, F, F],
     [F, F, F],
     [F, D, F],
   );
-  // openDoors keys the door position "1,2".
   const openDoors = new Set(['1,2']);
   assert.equal(
-    getSewerCap(grid, 1, 1, F, openDoors),
+    getSewerDoorCap(grid, 1, 1, F, openDoors),
     WALL_INDEX.DOOR_OVERHANG_OPEN,
   );
 });
 
-test('getSewerCap — closed side-door cell with wall below returns DOOR_SIDEWAYS_OVERHANG_CLOSED', () => {
+test('getSewerDoorCap — closed side-door cell with wall below returns DOOR_SIDEWAYS_OVERHANG_CLOSED', () => {
   const grid = g(
     [W, W, W],
     [F, D, F],
@@ -178,46 +205,66 @@ test('getSewerCap — closed side-door cell with wall below returns DOOR_SIDEWAY
   );
   // Below (1,2)=W. rightBelow (2,2)=W (no +1). leftBelow (0,2)=W (no +2). Mask=0.
   assert.equal(
-    getSewerCap(grid, 1, 1, D, new Set()),
+    getSewerDoorCap(grid, 1, 1, D, new Set()),
     WALL_INDEX.DOOR_SIDEWAYS_OVERHANG_CLOSED,
   );
 });
 
-test('getSewerCap — open side-door cell with wall below returns DOOR_SIDEWAYS_OVERHANG', () => {
+test('getSewerDoorCap — open side-door cell with wall below returns DOOR_SIDEWAYS_OVERHANG', () => {
   const grid = g(
     [W, W, W],
     [F, D, F],
     [W, W, W],
   );
-  // Door at "1,1" is in the open set.
   assert.equal(
-    getSewerCap(grid, 1, 1, D, new Set(['1,1'])),
+    getSewerDoorCap(grid, 1, 1, D, new Set(['1,1'])),
     WALL_INDEX.DOOR_SIDEWAYS_OVERHANG,
   );
 });
 
-test('getSewerCap — locked side-door cell with wall below returns DOOR_SIDEWAYS_OVERHANG_LOCKED', () => {
+test('getSewerDoorCap — locked side-door cell with wall below returns DOOR_SIDEWAYS_OVERHANG_LOCKED', () => {
   const grid = g(
     [W, W, W],
     [F, LD, F],
     [W, W, W],
   );
   assert.equal(
-    getSewerCap(grid, 1, 1, LD, new Set()),
+    getSewerDoorCap(grid, 1, 1, LD, new Set()),
     WALL_INDEX.DOOR_SIDEWAYS_OVERHANG_LOCKED,
   );
 });
 
-test('getSewerCap — wall above a locked door returns DOOR_SIDEWAYS_LOCKED', () => {
+test('getSewerDoorCap — wall above a locked door returns DOOR_SIDEWAYS_LOCKED', () => {
   const grid = g(
     [W, W, W],
     [W, W, W],
     [W, LD, W],
   );
   assert.equal(
-    getSewerCap(grid, 1, 1, W, new Set()),
+    getSewerDoorCap(grid, 1, 1, W, new Set()),
     WALL_INDEX.DOOR_SIDEWAYS_LOCKED,
   );
+});
+
+test('getSewerDoorCap — wall above a closed door returns DOOR_SIDEWAYS', () => {
+  const grid = g(
+    [W, W, W],
+    [W, W, W],
+    [W, D, W],
+  );
+  assert.equal(
+    getSewerDoorCap(grid, 1, 1, W, new Set()),
+    WALL_INDEX.DOOR_SIDEWAYS,
+  );
+});
+
+test('getSewerDoorCap — floor with floor below returns null', () => {
+  const grid = g(
+    [F, F, F],
+    [F, F, F],
+    [F, F, F],
+  );
+  assert.equal(getSewerDoorCap(grid, 1, 1, F, new Set()), null);
 });
 
 test('getSewerWallInstructions — wall above floor returns a raised-face instruction', () => {
